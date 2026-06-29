@@ -221,9 +221,10 @@ export default function MealsPage() {
       )}
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="fixed inset-0 z-50 overflow-hidden">
           <div className="absolute inset-0 bg-black/60" onClick={handleClose} />
-          <div className="relative rounded-t-2xl bg-neutral-900 border-t border-neutral-800 p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+          <div className="absolute bottom-0 inset-x-0 rounded-t-2xl bg-neutral-900 border-t border-neutral-800 flex flex-col max-h-[85vh]">
+          <div className="overflow-y-auto overscroll-contain p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-lg">
                 {step === "photo" ? "Log Meal" : step === "analyzing" ? "Analyzing…" : "Confirm Meal"}
@@ -404,6 +405,7 @@ export default function MealsPage() {
                 </div>
               </>
             )}
+          </div>
           </div>
         </div>
       )}
