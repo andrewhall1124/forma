@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp, Type } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 type Ingredient = {
@@ -53,6 +53,8 @@ export default function MealsPage() {
   const [expandedMealId, setExpandedMealId] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
+  const [inputMode, setInputMode] = useState<"photo" | "text">("photo");
+  const [textInput, setTextInput] = useState("");
   const [step, setStep] = useState<"photo" | "analyzing" | "confirm">("photo");
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -169,6 +171,28 @@ export default function MealsPage() {
     reader.readAsDataURL(file);
   }
 
+  async function handleText() {
+    if (!textInput.trim()) return;
+    setError(null);
+    setStep("analyzing");
+    try {
+      const res = await fetch("/api/meals/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textInput.trim() }),
+      });
+      if (!res.ok) throw new Error("Analysis failed");
+      const result: Analysis = await res.json();
+      setAnalysis(result);
+      setMealType(result.mealType || "lunch");
+      setServings(1);
+      setStep("confirm");
+    } catch {
+      setError("Couldn't analyze that description. Please try again.");
+      setStep("photo");
+    }
+  }
+
   async function handleSave() {
     if (!analysis) return;
     setSaving(true);
@@ -211,6 +235,8 @@ export default function MealsPage() {
   function handleClose() {
     setIsOpen(false);
     setEditingMeal(null);
+    setInputMode("photo");
+    setTextInput("");
     setStep("photo");
     setPreview(null);
     setAnalysis(null);
@@ -363,23 +389,70 @@ export default function MealsPage() {
                     ))}
                   </div>
 
+                  {/* Input mode toggle */}
+                  <div className="flex gap-2 rounded-xl bg-neutral-800 p-1">
+                    <button
+                      onClick={() => setInputMode("photo")}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors",
+                        inputMode === "photo"
+                          ? "bg-neutral-700 text-white"
+                          : "text-neutral-400 hover:text-neutral-200"
+                      )}
+                    >
+                      <Camera size={15} /> Photo
+                    </button>
+                    <button
+                      onClick={() => setInputMode("text")}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors",
+                        inputMode === "text"
+                          ? "bg-neutral-700 text-white"
+                          : "text-neutral-400 hover:text-neutral-200"
+                      )}
+                    >
+                      <Type size={15} /> Describe
+                    </button>
+                  </div>
+
                   {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    className="w-full flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-neutral-700 p-10 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200 transition-colors"
-                  >
-                    <Camera size={32} />
-                    <span className="text-sm">Take a photo or choose from library</span>
-                  </button>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleFile}
-                  />
+                  {inputMode === "photo" ? (
+                    <>
+                      <button
+                        onClick={() => fileRef.current?.click()}
+                        className="w-full flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-neutral-700 p-10 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200 transition-colors"
+                      >
+                        <Camera size={32} />
+                        <span className="text-sm">Take a photo or choose from library</span>
+                      </button>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFile}
+                      />
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <textarea
+                        value={textInput}
+                        onChange={(e) => setTextInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleText(); } }}
+                        placeholder="e.g. 2.5 bowls of cinnamon toast crunch with whole milk"
+                        rows={3}
+                        className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-neutral-500 resize-none"
+                      />
+                      <button
+                        onClick={handleText}
+                        disabled={!textInput.trim()}
+                        className="w-full rounded-xl bg-blue-600 py-3 text-sm font-medium hover:bg-blue-500 disabled:opacity-40 transition-colors"
+                      >
+                        Analyze
+                      </button>
+                    </div>
+                  )}
 
                   {recentMeals.length > 0 && (
                     <div className="space-y-2">
