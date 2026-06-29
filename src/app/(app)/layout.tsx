@@ -26,8 +26,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 pb-20 md:pb-0 flex flex-col md:max-w-3xl">
-          {children}
+        <main className="flex-1 pb-20 md:pb-0 flex flex-col">
+          <div className="flex-1 flex flex-col w-full md:max-w-4xl md:mx-auto">
+            {children}
+          </div>
         </main>
 
         <Nav />
