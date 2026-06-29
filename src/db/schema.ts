@@ -60,6 +60,7 @@ export const meals = pgTable("meals", {
   carbsG: real("carbs_g"),
   fatG: real("fat_g"),
   fiberG: real("fiber_g"),
+  servings: real("servings").default(1),
   openFoodFactsId: text("open_food_facts_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
