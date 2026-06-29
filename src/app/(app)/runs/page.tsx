@@ -22,10 +22,17 @@ type Run = {
   elevationGainMeters: number | null;
 };
 
+const MI = 1609.34;
+
+function toMiles(meters: number) {
+  return meters / MI;
+}
+
 function formatPace(secsPerKm: number) {
-  const mins = Math.floor(secsPerKm / 60);
-  const secs = secsPerKm % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}/km`;
+  const secsPerMile = Math.round(secsPerKm * 1.60934);
+  const mins = Math.floor(secsPerMile / 60);
+  const secs = secsPerMile % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}/mi`;
 }
 
 function formatDuration(secs: number) {
@@ -51,7 +58,7 @@ export default function RunsPage() {
     .reverse()
     .map((r) => ({
       date: r.date.slice(5),
-      km: r.distanceMeters ? parseFloat((r.distanceMeters / 1000).toFixed(2)) : 0,
+      mi: r.distanceMeters ? parseFloat(toMiles(r.distanceMeters).toFixed(2)) : 0,
     }));
 
   if (loading) {
@@ -80,7 +87,7 @@ export default function RunsPage() {
                 />
                 <YAxis
                   tick={{ fontSize: 11, fill: "#737373" }}
-                  unit=" km"
+                  unit=" mi"
                   width={45}
                   axisLine={false}
                   tickLine={false}
@@ -93,9 +100,9 @@ export default function RunsPage() {
                     fontSize: 12,
                   }}
                   labelStyle={{ color: "#e5e5e5" }}
-                  formatter={(v) => [`${v} km`, "Distance"]}
+                  formatter={(v) => [`${v} mi`, "Distance"]}
                 />
-                <Bar dataKey="km" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="mi" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -110,7 +117,7 @@ export default function RunsPage() {
                   <div>
                     <p className="font-semibold text-lg">
                       {run.distanceMeters
-                        ? `${(run.distanceMeters / 1000).toFixed(2)} km`
+                        ? `${toMiles(run.distanceMeters).toFixed(2)} mi`
                         : "—"}
                     </p>
                     <p className="text-xs text-neutral-400 mt-0.5">
@@ -128,7 +135,7 @@ export default function RunsPage() {
                     )}
                     {run.elevationGainMeters != null && (
                       <p className="text-xs text-neutral-500 mt-0.5">
-                        ↑ {Math.round(run.elevationGainMeters)} m
+                        ↑ {Math.round(run.elevationGainMeters * 3.28084)} ft
                       </p>
                     )}
                   </div>

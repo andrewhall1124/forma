@@ -10,7 +10,7 @@ function todayStr() {
 }
 
 function formatDist(m: number) {
-  return (m / 1000).toFixed(1) + " km";
+  return (m / 1609.34).toFixed(2) + " mi";
 }
 
 function formatSleep(secs: number) {
