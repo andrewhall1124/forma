@@ -1,8 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2 } from "lucide-react";
+import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/cn";
+
+type Ingredient = {
+  name: string;
+  amount: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+};
 
 type Meal = {
   id: number;
@@ -16,6 +25,7 @@ type Meal = {
   fatG: number | null;
   fiberG: number | null;
   servings: number | null;
+  ingredients: Ingredient[] | null;
   createdAt: string;
 };
 
@@ -28,6 +38,7 @@ type Analysis = {
   fatG: number;
   fiberG: number;
   description: string;
+  ingredients: Ingredient[];
 };
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
@@ -39,6 +50,7 @@ function todayStr() {
 export default function MealsPage() {
   const [mealList, setMealList] = useState<Meal[]>([]);
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
+  const [expandedMealId, setExpandedMealId] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [step, setStep] = useState<"photo" | "analyzing" | "confirm">("photo");
@@ -91,6 +103,7 @@ export default function MealsPage() {
       fatG: meal.fatG ?? 0,
       fiberG: meal.fiberG ?? 0,
       description: meal.description ?? "",
+      ingredients: meal.ingredients ?? [],
     });
     setMealType(meal.mealType ?? "snack");
     setServings(meal.servings ?? 1);
@@ -114,6 +127,7 @@ export default function MealsPage() {
       fatG: meal.fatG ?? 0,
       fiberG: meal.fiberG ?? 0,
       description: meal.description ?? "",
+      ingredients: meal.ingredients ?? [],
     });
     setMealType(meal.mealType ?? "snack");
     setServings(1);
@@ -169,6 +183,7 @@ export default function MealsPage() {
         fatG: analysis.fatG,
         fiberG: analysis.fiberG,
         servings,
+        ingredients: analysis.ingredients?.length ? analysis.ingredients : null,
       };
 
       if (editingMeal) {
@@ -231,40 +246,76 @@ export default function MealsPage() {
         <div className="space-y-2">
           {mealList.map((meal) => {
             const s = meal.servings ?? 1;
+            const isExpanded = expandedMealId === meal.id;
+            const hasIngredients = meal.ingredients && meal.ingredients.length > 0;
             return (
-              <div key={meal.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{meal.name}</p>
-                    <p className="text-xs text-neutral-400 capitalize mt-0.5">
-                      {[meal.mealType, s !== 1 ? `${s} serving${s !== 1 ? "s" : ""}` : null]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
+              <div key={meal.id} className="rounded-xl border border-neutral-800 bg-neutral-900">
+                {/* Card header — tappable to expand ingredients */}
+                <div
+                  className={cn("p-4", hasIngredients && "cursor-pointer")}
+                  onClick={() => hasIngredients && setExpandedMealId(isExpanded ? null : meal.id)}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{meal.name}</p>
+                      <p className="text-xs text-neutral-400 capitalize mt-0.5">
+                        {[meal.mealType, s !== 1 ? `${s} serving${s !== 1 ? "s" : ""}` : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 ml-3 shrink-0">
+                      <p className="text-sm font-semibold text-neutral-200 mr-1">
+                        {meal.calories != null ? `${Math.round(meal.calories * s)} kcal` : "—"}
+                      </p>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEdit(meal); }}
+                        className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(meal); }}
+                        className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 ml-3 shrink-0">
-                    <p className="text-sm font-semibold text-neutral-200">
-                      {meal.calories != null ? `${Math.round(meal.calories * s)} kcal` : "—"}
-                    </p>
-                    <button
-                      onClick={() => handleEdit(meal)}
-                      className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(meal)}
-                      className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                  <div className="flex items-center justify-between mt-2">
+                    {(meal.proteinG != null || meal.carbsG != null || meal.fatG != null) && (
+                      <div className="flex gap-3 text-xs text-neutral-400">
+                        {meal.proteinG != null && <span>P {Math.round(meal.proteinG * s)}g</span>}
+                        {meal.carbsG != null && <span>C {Math.round(meal.carbsG * s)}g</span>}
+                        {meal.fatG != null && <span>F {Math.round(meal.fatG * s)}g</span>}
+                      </div>
+                    )}
+                    {hasIngredients && (
+                      <span className="text-xs text-neutral-500 ml-auto flex items-center gap-1">
+                        {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        {meal.ingredients!.length} ingredients
+                      </span>
+                    )}
                   </div>
                 </div>
-                {(meal.proteinG != null || meal.carbsG != null || meal.fatG != null) && (
-                  <div className="flex gap-3 mt-2 text-xs text-neutral-400">
-                    {meal.proteinG != null && <span>P {Math.round(meal.proteinG * s)}g</span>}
-                    {meal.carbsG != null && <span>C {Math.round(meal.carbsG * s)}g</span>}
-                    {meal.fatG != null && <span>F {Math.round(meal.fatG * s)}g</span>}
+
+                {/* Ingredient breakdown */}
+                {isExpanded && hasIngredients && (
+                  <div className="border-t border-neutral-800 px-4 pb-3 pt-2 space-y-1.5">
+                    {meal.ingredients!.map((ing, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-neutral-200 truncate">{ing.name}</span>
+                          <span className="text-neutral-500 ml-2 text-xs">{ing.amount}</span>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <span className="text-neutral-300 text-xs">{Math.round(ing.calories * s)} kcal</span>
+                          <span className="text-neutral-500 text-xs ml-2">
+                            P{Math.round(ing.proteinG * s)} C{Math.round(ing.carbsG * s)} F{Math.round(ing.fatG * s)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -419,6 +470,25 @@ export default function MealsPage() {
                       </div>
                     ))}
                   </div>
+
+                  {analysis.ingredients && analysis.ingredients.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-neutral-500 uppercase tracking-wide">Ingredients</p>
+                      <div className="rounded-xl bg-neutral-800 divide-y divide-neutral-700">
+                        {analysis.ingredients.map((ing, i) => (
+                          <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm text-neutral-200 truncate">{ing.name}</span>
+                              <span className="text-xs text-neutral-500 ml-2">{ing.amount}</span>
+                            </div>
+                            <span className="text-xs text-neutral-400 shrink-0 ml-3 tabular-nums">
+                              {Math.round(ing.calories * servings)} kcal
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-4 gap-2">
                     {MEAL_TYPES.map((t) => (

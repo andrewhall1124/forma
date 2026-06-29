@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
   const response = await client.messages.create({
     model: "claude-opus-4-8",
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [
       {
         role: "user",
@@ -33,9 +33,19 @@ Return ONLY a valid JSON object with exactly these fields — no markdown fences
   "carbsG": number,
   "fatG": number,
   "fiberG": number,
-  "description": "one sentence describing what you see"
+  "description": "one sentence describing what you see",
+  "ingredients": [
+    {
+      "name": "ingredient name",
+      "amount": "human-readable amount, e.g. '1 cup' or '2 slices'",
+      "calories": number,
+      "proteinG": number,
+      "carbsG": number,
+      "fatG": number
+    }
+  ]
 }
-Base all estimates on the portion sizes visible in the photo. Be realistic and accurate.`,
+List every distinct ingredient or component visible in the meal. The ingredient calories/macros should sum to approximately the totals above. Base all estimates on the portion sizes visible in the photo. Be realistic and accurate.`,
           },
         ],
       },
