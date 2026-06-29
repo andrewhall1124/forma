@@ -1,8 +1,9 @@
 export const dynamic = "force-dynamic";
 
+import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { meals, waterLogs, sleepLogs, runs } from "@/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, sql, and } from "drizzle-orm";
 
 function todayStr() {
   return new Date().toISOString().split("T")[0];
@@ -19,19 +20,20 @@ function formatSleep(secs: number) {
 }
 
 export default async function Dashboard() {
+  const { userId } = await auth();
   const today = todayStr();
 
   const [[calorieRow], [waterRow], [lastSleep], [lastRun]] = await Promise.all([
     db
       .select({ total: sql<number>`coalesce(sum(${meals.calories}), 0)` })
       .from(meals)
-      .where(eq(meals.date, today)),
+      .where(and(eq(meals.userId, userId!), eq(meals.date, today))),
     db
       .select({ total: sql<number>`coalesce(sum(${waterLogs.amountMl}), 0)` })
       .from(waterLogs)
-      .where(eq(waterLogs.date, today)),
-    db.select().from(sleepLogs).orderBy(desc(sleepLogs.date)).limit(1),
-    db.select().from(runs).orderBy(desc(runs.date)).limit(1),
+      .where(and(eq(waterLogs.userId, userId!), eq(waterLogs.date, today))),
+    db.select().from(sleepLogs).where(eq(sleepLogs.userId, userId!)).orderBy(desc(sleepLogs.date)).limit(1),
+    db.select().from(runs).where(eq(runs.userId, userId!)).orderBy(desc(runs.date)).limit(1),
   ]);
 
   const calories = calorieRow?.total ?? 0;
@@ -44,12 +46,7 @@ export default async function Dashboard() {
       </p>
 
       <div className="grid grid-cols-2 gap-3">
-        <StatCard
-          label="Calories"
-          value={Math.round(calories)}
-          unit="kcal"
-          sub="today"
-        />
+        <StatCard label="Calories" value={Math.round(calories)} unit="kcal" sub="today" />
         <StatCard
           label="Water"
           value={waterMl >= 1000 ? (waterMl / 1000).toFixed(1) : waterMl}

@@ -10,6 +10,7 @@ import {
 
 export const runs = pgTable("runs", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   garminActivityId: text("garmin_activity_id").unique(),
   date: date("date").notNull(),
   distanceMeters: real("distance_meters"),
@@ -24,6 +25,7 @@ export const runs = pgTable("runs", {
 
 export const sleepLogs = pgTable("sleep_logs", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   date: date("date").notNull().unique(),
   totalSleepSeconds: integer("total_sleep_seconds"),
   deepSleepSeconds: integer("deep_sleep_seconds"),
@@ -36,6 +38,7 @@ export const sleepLogs = pgTable("sleep_logs", {
 
 export const bodyComposition = pgTable("body_composition", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   date: date("date").notNull().unique(),
   weightKg: real("weight_kg"),
   bodyFatPct: real("body_fat_pct"),
@@ -46,8 +49,9 @@ export const bodyComposition = pgTable("body_composition", {
 
 export const meals = pgTable("meals", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   date: date("date").notNull(),
-  mealType: text("meal_type"), // breakfast, lunch, dinner, snack
+  mealType: text("meal_type"),
   name: text("name").notNull(),
   description: text("description"),
   photoUrl: text("photo_url"),
@@ -62,6 +66,7 @@ export const meals = pgTable("meals", {
 
 export const waterLogs = pgTable("water_logs", {
   id: serial("id").primaryKey(),
+  userId: text("user_id"),
   date: date("date").notNull(),
   amountMl: integer("amount_ml").notNull(),
   loggedAt: timestamp("logged_at").defaultNow(),

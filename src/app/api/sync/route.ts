@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const res = await fetch(`${syncUrl}/sync`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: conn.email, password: conn.password, days }),
+    body: JSON.stringify({ email: conn.email, password: conn.password, userId, days }),
     signal: AbortSignal.timeout(120_000),
   });
 

@@ -19,6 +19,7 @@ app = FastAPI(title="Forma Garmin Sync")
 class SyncRequest(BaseModel):
     email: Optional[str] = None
     password: Optional[str] = None
+    userId: Optional[str] = None
     days: int = 30
 
 
@@ -32,7 +33,12 @@ def trigger_sync(body: SyncRequest = None):
     if body is None:
         body = SyncRequest()
     try:
-        result = run_sync(days=body.days, email=body.email, password=body.password)
+        result = run_sync(
+            days=body.days,
+            email=body.email,
+            password=body.password,
+            user_id=body.userId,
+        )
         return JSONResponse(result)
     except Exception as exc:
         logger.error("Sync failed: %s", exc, exc_info=True)

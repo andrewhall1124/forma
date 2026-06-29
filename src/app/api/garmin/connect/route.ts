@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { garminConnections } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { garminConnections, runs, sleepLogs, meals, waterLogs, bodyComposition } from "@/db/schema";
+import { eq, isNull } from "drizzle-orm";
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -19,6 +19,15 @@ export async function POST(req: Request) {
       target: garminConnections.userId,
       set: { email, password },
     });
+
+  // Claim any existing unclaimed rows (e.g. historical Garmin imports before userId was added)
+  await Promise.all([
+    db.update(runs).set({ userId }).where(isNull(runs.userId)),
+    db.update(sleepLogs).set({ userId }).where(isNull(sleepLogs.userId)),
+    db.update(meals).set({ userId }).where(isNull(meals.userId)),
+    db.update(waterLogs).set({ userId }).where(isNull(waterLogs.userId)),
+    db.update(bodyComposition).set({ userId }).where(isNull(bodyComposition.userId)),
+  ]);
 
   return Response.json({ ok: true });
 }

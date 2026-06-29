@@ -22,7 +22,7 @@ def get_db_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
-def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
+def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
     activities = garmin.get_activities(start=0, limit=100)
 
     running_keys = {"running", "trail_running", "treadmill_running", "track_running"}
@@ -39,13 +39,12 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
             if not activity_date or not activity_id:
                 continue
 
-            # Only sync within the requested date window
             if (date.today() - date.fromisoformat(activity_date)).days > days:
                 continue
 
-            distance = a.get("distance")      # metres
-            duration = a.get("duration")      # seconds
-            avg_speed = a.get("averageSpeed") # m/s
+            distance = a.get("distance")
+            duration = a.get("duration")
+            avg_speed = a.get("averageSpeed")
             avg_hr = a.get("averageHR")
             max_hr = a.get("maxHR")
             calories = a.get("calories")
@@ -56,12 +55,13 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
             cur.execute(
                 """
                 INSERT INTO runs
-                    (garmin_activity_id, date, distance_meters, duration_seconds,
+                    (garmin_activity_id, date, user_id, distance_meters, duration_seconds,
                      avg_pace_seconds_per_km, avg_heart_rate, max_heart_rate,
                      calories, elevation_gain_meters)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (garmin_activity_id) DO UPDATE SET
                     date                    = EXCLUDED.date,
+                    user_id                 = EXCLUDED.user_id,
                     distance_meters         = EXCLUDED.distance_meters,
                     duration_seconds        = EXCLUDED.duration_seconds,
                     avg_pace_seconds_per_km = EXCLUDED.avg_pace_seconds_per_km,
@@ -73,6 +73,7 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
                 (
                     activity_id,
                     activity_date,
+                    user_id,
                     distance,
                     int(duration) if duration is not None else None,
                     avg_pace,
@@ -88,12 +89,10 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
 
 
 def extract_sleep_score(daily: dict) -> int | None:
-    """Try several paths Garmin uses for the overall sleep score."""
     candidates = [
         daily.get("sleepScore"),
         (daily.get("sleepScores") or {}).get("overall", {}).get("value"),
         (daily.get("sleepScores") or {}).get("totalScore"),
-        (daily.get("averageSleepStress") or {}) and None,  # placeholder sentinel
     ]
     for v in candidates:
         if isinstance(v, (int, float)) and v > 0:
@@ -101,7 +100,7 @@ def extract_sleep_score(daily: dict) -> int | None:
     return None
 
 
-def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14) -> int:
+def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14, user_id: str = None) -> int:
     today = date.today()
     synced = 0
 
@@ -119,11 +118,12 @@ def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14) -> int:
                 cur.execute(
                     """
                     INSERT INTO sleep_logs
-                        (date, total_sleep_seconds, deep_sleep_seconds,
+                        (date, user_id, total_sleep_seconds, deep_sleep_seconds,
                          light_sleep_seconds, rem_sleep_seconds,
                          awake_sleep_seconds, sleep_score)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (date) DO UPDATE SET
+                        user_id             = EXCLUDED.user_id,
                         total_sleep_seconds = EXCLUDED.total_sleep_seconds,
                         deep_sleep_seconds  = EXCLUDED.deep_sleep_seconds,
                         light_sleep_seconds = EXCLUDED.light_sleep_seconds,
@@ -133,6 +133,7 @@ def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14) -> int:
                     """,
                     (
                         date_str,
+                        user_id,
                         total,
                         daily.get("deepSleepSeconds"),
                         daily.get("lightSleepSeconds"),
@@ -149,7 +150,7 @@ def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14) -> int:
     return synced
 
 
-def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
+def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
     today = date.today()
     start = (today - timedelta(days=days)).isoformat()
     end = today.isoformat()
@@ -164,7 +165,7 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30) ->
     with conn.cursor() as cur:
         for m in measurements:
             cal_date = m.get("calendarDate")
-            weight_g = m.get("weight")  # Garmin returns grams
+            weight_g = m.get("weight")
             if not cal_date or weight_g is None:
                 continue
 
@@ -173,16 +174,18 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30) ->
             cur.execute(
                 """
                 INSERT INTO body_composition
-                    (date, weight_kg, body_fat_pct, muscle_mass_kg, bmi)
-                VALUES (%s, %s, %s, %s, %s)
+                    (date, user_id, weight_kg, body_fat_pct, muscle_mass_kg, bmi)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (date) DO UPDATE SET
-                    weight_kg     = EXCLUDED.weight_kg,
-                    body_fat_pct  = EXCLUDED.body_fat_pct,
+                    user_id        = EXCLUDED.user_id,
+                    weight_kg      = EXCLUDED.weight_kg,
+                    body_fat_pct   = EXCLUDED.body_fat_pct,
                     muscle_mass_kg = EXCLUDED.muscle_mass_kg,
-                    bmi           = EXCLUDED.bmi
+                    bmi            = EXCLUDED.bmi
                 """,
                 (
                     cal_date,
+                    user_id,
                     weight_g / 1000,
                     m.get("bodyFat"),
                     muscle_g / 1000 if muscle_g is not None else None,
@@ -194,20 +197,20 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30) ->
     return len(measurements)
 
 
-def run_sync(days: int = 30, email: str = None, password: str = None) -> dict:
-    logger.info("Starting Garmin sync (last %d days)…", days)
+def run_sync(days: int = 30, email: str = None, password: str = None, user_id: str = None) -> dict:
+    logger.info("Starting Garmin sync (last %d days, user=%s)…", days, user_id)
     garmin = get_garmin_client(email=email, password=password)
     conn = get_db_conn()
     try:
-        runs = sync_runs(garmin, conn, days=days)
-        logger.info("Runs synced: %d", runs)
+        n_runs = sync_runs(garmin, conn, days=days, user_id=user_id)
+        logger.info("Runs synced: %d", n_runs)
 
-        sleep = sync_sleep(garmin, conn, days=min(days, 14))
+        sleep = sync_sleep(garmin, conn, days=min(days, 14), user_id=user_id)
         logger.info("Sleep nights synced: %d", sleep)
 
-        body = sync_body_composition(garmin, conn, days=days)
+        body = sync_body_composition(garmin, conn, days=days, user_id=user_id)
         logger.info("Body composition records synced: %d", body)
 
-        return {"status": "ok", "runs": runs, "sleep": sleep, "body": body}
+        return {"status": "ok", "runs": n_runs, "sleep": sleep, "body": body}
     finally:
         conn.close()
