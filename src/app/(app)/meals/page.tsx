@@ -89,10 +89,10 @@ export default function MealsPage() {
     loadRecent();
   }, []);
 
-  const totalCalories = mealList.reduce(
-    (sum, m) => sum + (m.calories ?? 0) * (m.servings ?? 1),
-    0
-  );
+  const totalCalories = mealList.reduce((sum, m) => sum + (m.calories ?? 0) * (m.servings ?? 1), 0);
+  const totalProtein = mealList.reduce((sum, m) => sum + (m.proteinG ?? 0) * (m.servings ?? 1), 0);
+  const totalCarbs = mealList.reduce((sum, m) => sum + (m.carbsG ?? 0) * (m.servings ?? 1), 0);
+  const totalFat = mealList.reduce((sum, m) => sum + (m.fatG ?? 0) * (m.servings ?? 1), 0);
 
   function handleEdit(meal: Meal) {
     setEditingMeal(meal);
@@ -256,6 +256,11 @@ export default function MealsPage() {
           <p className="text-xs text-neutral-400">Today</p>
           <p className="text-3xl font-bold">{Math.round(totalCalories)}</p>
           <p className="text-xs text-neutral-400">kcal consumed</p>
+          <div className="flex gap-3 mt-1.5 text-xs text-neutral-500">
+            <span>P <span className="text-neutral-300 font-medium">{Math.round(totalProtein)}g</span></span>
+            <span>C <span className="text-neutral-300 font-medium">{Math.round(totalCarbs)}g</span></span>
+            <span>F <span className="text-neutral-300 font-medium">{Math.round(totalFat)}g</span></span>
+          </div>
         </div>
         <button
           onClick={() => setIsOpen(true)}

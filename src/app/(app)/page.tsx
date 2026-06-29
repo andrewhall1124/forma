@@ -23,9 +23,14 @@ export default async function Dashboard() {
   const { userId } = await auth();
   const today = todayStr();
 
-  const [[calorieRow], [waterRow], [lastSleep], [lastRun]] = await Promise.all([
+  const [[macroRow], [waterRow], [lastSleep], [lastRun]] = await Promise.all([
     db
-      .select({ total: sql<number>`coalesce(sum(${meals.calories}), 0)` })
+      .select({
+        calories: sql<number>`coalesce(sum(coalesce(${meals.calories}, 0) * coalesce(${meals.servings}, 1)), 0)`,
+        protein: sql<number>`coalesce(sum(coalesce(${meals.proteinG}, 0) * coalesce(${meals.servings}, 1)), 0)`,
+        carbs: sql<number>`coalesce(sum(coalesce(${meals.carbsG}, 0) * coalesce(${meals.servings}, 1)), 0)`,
+        fat: sql<number>`coalesce(sum(coalesce(${meals.fatG}, 0) * coalesce(${meals.servings}, 1)), 0)`,
+      })
       .from(meals)
       .where(and(eq(meals.userId, userId!), eq(meals.date, today))),
     db
@@ -36,7 +41,10 @@ export default async function Dashboard() {
     db.select().from(runs).where(eq(runs.userId, userId!)).orderBy(desc(runs.date)).limit(1),
   ]);
 
-  const calories = calorieRow?.total ?? 0;
+  const calories = macroRow?.calories ?? 0;
+  const protein = macroRow?.protein ?? 0;
+  const carbs = macroRow?.carbs ?? 0;
+  const fat = macroRow?.fat ?? 0;
   const waterMl = waterRow?.total ?? 0;
 
   return (
@@ -46,7 +54,12 @@ export default async function Dashboard() {
       </p>
 
       <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Calories" value={Math.round(calories)} unit="kcal" sub="today" />
+        <NutritionCard
+          calories={calories}
+          protein={protein}
+          carbs={carbs}
+          fat={fat}
+        />
         <StatCard
           label="Water"
           value={waterMl >= 1000 ? (waterMl / 1000).toFixed(1) : waterMl}
@@ -89,6 +102,61 @@ function StatCard({
         {unit && <span className="text-sm font-normal text-neutral-400 ml-1">{unit}</span>}
       </p>
       <p className="mt-1 text-xs text-neutral-500">{sub}</p>
+    </div>
+  );
+}
+
+function MacroRow({
+  label,
+  value,
+  target,
+  unit,
+  color,
+}: {
+  label: string;
+  value: number;
+  target: number;
+  unit: string;
+  color: string;
+}) {
+  const pct = Math.min(100, Math.round((value / target) * 100));
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-1">
+        <span className="text-xs text-neutral-400">{label}</span>
+        <span className="text-xs">
+          <span className="text-neutral-200 font-medium">{Math.round(value)}</span>
+          <span className="text-neutral-500">/{target}{unit}</span>
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-neutral-800 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function NutritionCard({
+  calories,
+  protein,
+  carbs,
+  fat,
+}: {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}) {
+  return (
+    <div className="col-span-2 rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
+      <div className="flex items-baseline justify-between">
+        <p className="text-xs text-neutral-400">Nutrition</p>
+        <p className="text-xs text-neutral-500">today</p>
+      </div>
+      <MacroRow label="Calories" value={calories} target={3400} unit="kcal" color="bg-orange-500" />
+      <MacroRow label="Carbs" value={carbs} target={462} unit="g" color="bg-amber-400" />
+      <MacroRow label="Protein" value={protein} target={165} unit="g" color="bg-blue-500" />
+      <MacroRow label="Fat" value={fat} target={90} unit="g" color="bg-emerald-500" />
     </div>
   );
 }
