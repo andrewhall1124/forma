@@ -1,0 +1,5 @@
+garminconnect>=0.2.20
+psycopg2-binary>=2.9
+fastapi>=0.115
+uvicorn[standard]>=0.30
+schedule>=1.2

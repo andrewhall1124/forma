@@ -1,0 +1,212 @@
+import os
+import logging
+from datetime import date, timedelta
+
+import garminconnect
+import psycopg2
+
+logger = logging.getLogger(__name__)
+
+
+def get_garmin_client() -> garminconnect.Garmin:
+    client = garminconnect.Garmin(
+        email=os.environ["GARMIN_EMAIL"],
+        password=os.environ["GARMIN_PASSWORD"],
+    )
+    client.login()
+    return client
+
+
+def get_db_conn():
+    return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
+def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
+    activities = garmin.get_activities(start=0, limit=100)
+
+    running_keys = {"running", "trail_running", "treadmill_running", "track_running"}
+    running = [
+        a for a in activities
+        if a.get("activityType", {}).get("typeKey", "") in running_keys
+    ]
+
+    with conn.cursor() as cur:
+        for a in running:
+            activity_id = str(a.get("activityId", ""))
+            start_time = a.get("startTimeLocal", "")
+            activity_date = start_time[:10] if start_time else None
+            if not activity_date or not activity_id:
+                continue
+
+            # Only sync within the requested date window
+            if (date.today() - date.fromisoformat(activity_date)).days > days:
+                continue
+
+            distance = a.get("distance")      # metres
+            duration = a.get("duration")      # seconds
+            avg_speed = a.get("averageSpeed") # m/s
+            avg_hr = a.get("averageHR")
+            max_hr = a.get("maxHR")
+            calories = a.get("calories")
+            elevation = a.get("elevationGain")
+
+            avg_pace = int(1000 / avg_speed) if avg_speed and avg_speed > 0 else None
+
+            cur.execute(
+                """
+                INSERT INTO runs
+                    (garmin_activity_id, date, distance_meters, duration_seconds,
+                     avg_pace_seconds_per_km, avg_heart_rate, max_heart_rate,
+                     calories, elevation_gain_meters)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (garmin_activity_id) DO UPDATE SET
+                    date                    = EXCLUDED.date,
+                    distance_meters         = EXCLUDED.distance_meters,
+                    duration_seconds        = EXCLUDED.duration_seconds,
+                    avg_pace_seconds_per_km = EXCLUDED.avg_pace_seconds_per_km,
+                    avg_heart_rate          = EXCLUDED.avg_heart_rate,
+                    max_heart_rate          = EXCLUDED.max_heart_rate,
+                    calories                = EXCLUDED.calories,
+                    elevation_gain_meters   = EXCLUDED.elevation_gain_meters
+                """,
+                (
+                    activity_id,
+                    activity_date,
+                    distance,
+                    int(duration) if duration is not None else None,
+                    avg_pace,
+                    int(avg_hr) if avg_hr is not None else None,
+                    int(max_hr) if max_hr is not None else None,
+                    int(calories) if calories is not None else None,
+                    elevation,
+                ),
+            )
+
+    conn.commit()
+    return len(running)
+
+
+def extract_sleep_score(daily: dict) -> int | None:
+    """Try several paths Garmin uses for the overall sleep score."""
+    candidates = [
+        daily.get("sleepScore"),
+        (daily.get("sleepScores") or {}).get("overall", {}).get("value"),
+        (daily.get("sleepScores") or {}).get("totalScore"),
+        (daily.get("averageSleepStress") or {}) and None,  # placeholder sentinel
+    ]
+    for v in candidates:
+        if isinstance(v, (int, float)) and v > 0:
+            return int(v)
+    return None
+
+
+def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14) -> int:
+    today = date.today()
+    synced = 0
+
+    with conn.cursor() as cur:
+        for i in range(days):
+            target = today - timedelta(days=i)
+            date_str = target.isoformat()
+            try:
+                data = garmin.get_sleep_data(date_str)
+                daily = data.get("dailySleepDTO") or {}
+                total = daily.get("sleepTimeSeconds")
+                if not total:
+                    continue
+
+                cur.execute(
+                    """
+                    INSERT INTO sleep_logs
+                        (date, total_sleep_seconds, deep_sleep_seconds,
+                         light_sleep_seconds, rem_sleep_seconds,
+                         awake_sleep_seconds, sleep_score)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (date) DO UPDATE SET
+                        total_sleep_seconds = EXCLUDED.total_sleep_seconds,
+                        deep_sleep_seconds  = EXCLUDED.deep_sleep_seconds,
+                        light_sleep_seconds = EXCLUDED.light_sleep_seconds,
+                        rem_sleep_seconds   = EXCLUDED.rem_sleep_seconds,
+                        awake_sleep_seconds = EXCLUDED.awake_sleep_seconds,
+                        sleep_score         = EXCLUDED.sleep_score
+                    """,
+                    (
+                        date_str,
+                        total,
+                        daily.get("deepSleepSeconds"),
+                        daily.get("lightSleepSeconds"),
+                        daily.get("remSleepSeconds"),
+                        daily.get("awakeSleepSeconds"),
+                        extract_sleep_score(daily),
+                    ),
+                )
+                synced += 1
+            except Exception as exc:
+                logger.warning("Sleep sync failed for %s: %s", date_str, exc)
+
+    conn.commit()
+    return synced
+
+
+def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30) -> int:
+    today = date.today()
+    start = (today - timedelta(days=days)).isoformat()
+    end = today.isoformat()
+
+    try:
+        data = garmin.get_body_composition(start, end)
+        measurements = data.get("dateWeightList") or []
+    except Exception as exc:
+        logger.warning("Body composition fetch failed: %s", exc)
+        return 0
+
+    with conn.cursor() as cur:
+        for m in measurements:
+            cal_date = m.get("calendarDate")
+            weight_g = m.get("weight")  # Garmin returns grams
+            if not cal_date or weight_g is None:
+                continue
+
+            muscle_g = m.get("muscleMass")
+
+            cur.execute(
+                """
+                INSERT INTO body_composition
+                    (date, weight_kg, body_fat_pct, muscle_mass_kg, bmi)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (date) DO UPDATE SET
+                    weight_kg     = EXCLUDED.weight_kg,
+                    body_fat_pct  = EXCLUDED.body_fat_pct,
+                    muscle_mass_kg = EXCLUDED.muscle_mass_kg,
+                    bmi           = EXCLUDED.bmi
+                """,
+                (
+                    cal_date,
+                    weight_g / 1000,
+                    m.get("bodyFat"),
+                    muscle_g / 1000 if muscle_g is not None else None,
+                    m.get("bmi"),
+                ),
+            )
+
+    conn.commit()
+    return len(measurements)
+
+
+def run_sync(days: int = 30) -> dict:
+    logger.info("Starting Garmin sync (last %d days)…", days)
+    garmin = get_garmin_client()
+    conn = get_db_conn()
+    try:
+        runs = sync_runs(garmin, conn, days=days)
+        logger.info("Runs synced: %d", runs)
+
+        sleep = sync_sleep(garmin, conn, days=min(days, 14))
+        logger.info("Sleep nights synced: %d", sleep)
+
+        body = sync_body_composition(garmin, conn, days=days)
+        logger.info("Body composition records synced: %d", body)
+
+        return {"status": "ok", "runs": runs, "sleep": sleep, "body": body}
+    finally:
+        conn.close()
