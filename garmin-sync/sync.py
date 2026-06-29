@@ -8,11 +8,12 @@ import psycopg2
 logger = logging.getLogger(__name__)
 
 
-def get_garmin_client() -> garminconnect.Garmin:
-    client = garminconnect.Garmin(
-        email=os.environ["GARMIN_EMAIL"],
-        password=os.environ["GARMIN_PASSWORD"],
-    )
+def get_garmin_client(email: str = None, password: str = None) -> garminconnect.Garmin:
+    email = email or os.environ.get("GARMIN_EMAIL")
+    password = password or os.environ.get("GARMIN_PASSWORD")
+    if not email or not password:
+        raise ValueError("Garmin credentials required (pass email/password or set GARMIN_EMAIL/GARMIN_PASSWORD)")
+    client = garminconnect.Garmin(email=email, password=password)
     client.login()
     return client
 
@@ -193,9 +194,9 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30) ->
     return len(measurements)
 
 
-def run_sync(days: int = 30) -> dict:
+def run_sync(days: int = 30, email: str = None, password: str = None) -> dict:
     logger.info("Starting Garmin sync (last %d days)…", days)
-    garmin = get_garmin_client()
+    garmin = get_garmin_client(email=email, password=password)
     conn = get_db_conn()
     try:
         runs = sync_runs(garmin, conn, days=days)

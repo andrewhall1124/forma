@@ -1,21 +1,37 @@
 import { UserButton } from "@clerk/nextjs";
+import { Settings } from "lucide-react";
+import Link from "next/link";
 import Nav from "@/components/nav";
+import SideNav from "@/components/side-nav";
 import SyncButton from "@/components/sync-button";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col min-h-screen max-w-lg mx-auto">
-      <header className="sticky top-0 z-10 flex items-center justify-between px-4 h-14 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur">
-        <span className="text-lg font-bold tracking-tight">Forma</span>
-        <div className="flex items-center gap-2">
-          <SyncButton />
-          <UserButton />
-        </div>
-      </header>
-      <main className="flex-1 pb-20">
-        {children}
-      </main>
-      <Nav />
+    <div className="flex min-h-screen">
+      <SideNav />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile-only header */}
+        <header className="md:hidden sticky top-0 z-10 flex items-center justify-between px-4 h-14 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur">
+          <span className="text-lg font-bold tracking-tight">Forma</span>
+          <div className="flex items-center gap-2">
+            <SyncButton />
+            <Link
+              href="/settings"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            >
+              <Settings size={16} />
+            </Link>
+            <UserButton />
+          </div>
+        </header>
+
+        <main className="flex-1 pb-20 md:pb-0 flex flex-col md:max-w-3xl">
+          {children}
+        </main>
+
+        <Nav />
+      </div>
     </div>
   );
 }

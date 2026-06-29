@@ -1,11 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export default function SyncButton() {
+  const [connected, setConnected] = useState<boolean | null>(null);
   const [state, setState] = useState<"idle" | "syncing" | "done" | "error">("idle");
+
+  useEffect(() => {
+    fetch("/api/garmin/status")
+      .then((r) => r.json())
+      .then((d) => setConnected(d.connected))
+      .catch(() => setConnected(false));
+  }, []);
+
+  if (!connected) return null;
 
   async function handleSync() {
     if (state === "syncing") return;
@@ -32,10 +42,7 @@ export default function SyncButton() {
         state === "error" && "text-red-400"
       )}
     >
-      <RefreshCw
-        size={16}
-        className={cn(state === "syncing" && "animate-spin")}
-      />
+      <RefreshCw size={16} className={cn(state === "syncing" && "animate-spin")} />
     </button>
   );
 }

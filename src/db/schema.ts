@@ -66,3 +66,10 @@ export const waterLogs = pgTable("water_logs", {
   amountMl: integer("amount_ml").notNull(),
   loggedAt: timestamp("logged_at").defaultNow(),
 });
+
+export const garminConnections = pgTable("garmin_connections", {
+  userId: text("user_id").primaryKey(),
+  email: text("email").notNull(),
+  password: text("password").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});

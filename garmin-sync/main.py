@@ -1,10 +1,9 @@
 import logging
-import threading
-import time
+from typing import Optional
 
-import schedule
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from sync import run_sync
 
@@ -16,30 +15,11 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Forma Garmin Sync")
 
-# ── background scheduler ────────────────────────────────────────────────────
 
-
-def scheduled_sync():
-    try:
-        result = run_sync(days=30)
-        logger.info("Scheduled sync complete: %s", result)
-    except Exception as exc:
-        logger.error("Scheduled sync failed: %s", exc, exc_info=True)
-
-
-def run_scheduler():
-    schedule.every(6).hours.do(scheduled_sync)
-    # Also run once at startup
-    scheduled_sync()
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
-
-
-threading.Thread(target=run_scheduler, daemon=True).start()
-
-
-# ── HTTP endpoints ──────────────────────────────────────────────────────────
+class SyncRequest(BaseModel):
+    email: Optional[str] = None
+    password: Optional[str] = None
+    days: int = 30
 
 
 @app.get("/health")
@@ -48,10 +28,12 @@ def health():
 
 
 @app.post("/sync")
-def trigger_sync(days: int = 30):
+def trigger_sync(body: SyncRequest = None):
+    if body is None:
+        body = SyncRequest()
     try:
-        result = run_sync(days=days)
+        result = run_sync(days=body.days, email=body.email, password=body.password)
         return JSONResponse(result)
     except Exception as exc:
-        logger.error("Manual sync failed: %s", exc, exc_info=True)
+        logger.error("Sync failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))

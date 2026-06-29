@@ -51,9 +51,10 @@ export default function WaterPage() {
   }
 
   return (
-    <div className="p-4 space-y-6">
-      <div className="flex flex-col items-center py-6 gap-4">
-        <div className="relative flex items-center justify-center w-40 h-40">
+    <div className="flex-1 flex flex-col p-4 gap-6">
+      {/* Ring — fills available vertical space and centers */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-0">
+        <div className="relative flex items-center justify-center w-44 h-44">
           <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
             <circle cx="50" cy="50" r="44" fill="none" stroke="#262626" strokeWidth="8" />
             <circle
