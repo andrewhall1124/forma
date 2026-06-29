@@ -64,13 +64,17 @@ export default async function Dashboard() {
           label="Water"
           value={waterMl >= 1000 ? (waterMl / 1000).toFixed(1) : waterMl}
           unit={waterMl >= 1000 ? "L" : "mL"}
-          sub="today"
+          sub={`${Math.round(Math.min(100, (waterMl / 2500) * 100))}% of 2.5L goal`}
+          progress={waterMl / 2500}
+          progressColor="bg-blue-500"
         />
         <StatCard
           label="Sleep"
           value={lastSleep?.totalSleepSeconds ? formatSleep(lastSleep.totalSleepSeconds) : "—"}
           unit=""
           sub={lastSleep ? `score ${lastSleep.sleepScore ?? "—"} · ${lastSleep.date}` : "no data"}
+          progress={lastSleep?.totalSleepSeconds ? lastSleep.totalSleepSeconds / (8 * 3600) : undefined}
+          progressColor="bg-purple-500"
         />
         <StatCard
           label="Last Run"
@@ -88,11 +92,15 @@ function StatCard({
   value,
   unit,
   sub,
+  progress,
+  progressColor = "bg-blue-500",
 }: {
   label: string;
   value: string | number;
   unit: string;
   sub: string;
+  progress?: number;
+  progressColor?: string;
 }) {
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
@@ -102,6 +110,14 @@ function StatCard({
         {unit && <span className="text-sm font-normal text-neutral-400 ml-1">{unit}</span>}
       </p>
       <p className="mt-1 text-xs text-neutral-500">{sub}</p>
+      {progress !== undefined && (
+        <div className="mt-2 h-1.5 rounded-full bg-neutral-800 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${progressColor}`}
+            style={{ width: `${Math.min(100, Math.round(progress * 100))}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

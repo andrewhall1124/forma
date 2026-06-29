@@ -8,7 +8,11 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
+
+const SLEEP_GOAL_HOURS = 8;
+const SLEEP_GOAL_SECONDS = SLEEP_GOAL_HOURS * 3600;
 
 type SleepLog = {
   id: number;
@@ -105,6 +109,12 @@ export default function SleepPage() {
                   labelStyle={{ color: "#e5e5e5" }}
                   formatter={(v) => [`${v}h`, "Sleep"]}
                 />
+                <ReferenceLine
+                  y={SLEEP_GOAL_HOURS}
+                  stroke="#6b7280"
+                  strokeDasharray="4 3"
+                  label={{ value: `${SLEEP_GOAL_HOURS}h goal`, position: "insideTopRight", fontSize: 10, fill: "#6b7280" }}
+                />
                 <Bar dataKey="hours" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -135,6 +145,17 @@ export default function SleepPage() {
                     {s.sleepScore != null && (
                       <p className="text-sm font-semibold mt-0.5 text-purple-400">
                         {s.sleepScore} pts
+                      </p>
+                    )}
+                    {s.totalSleepSeconds != null && (
+                      <p className="text-xs mt-0.5">
+                        {s.totalSleepSeconds >= SLEEP_GOAL_SECONDS ? (
+                          <span className="text-emerald-400">Goal met</span>
+                        ) : (
+                          <span className="text-neutral-500">
+                            -{formatHours(SLEEP_GOAL_SECONDS - s.totalSleepSeconds)} short
+                          </span>
+                        )}
                       </p>
                     )}
                   </div>
