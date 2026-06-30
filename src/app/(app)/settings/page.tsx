@@ -58,7 +58,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/sync", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        setSyncResult(`Synced — ${data.runs ?? 0} runs, ${data.sleep ?? 0} sleep nights`);
+        setSyncResult(`Synced — ${data.activities ?? 0} activities, ${data.sleep ?? 0} sleep nights`);
       } else {
         setSyncResult(`Error: ${data.error ?? "Sync failed"}`);
       }

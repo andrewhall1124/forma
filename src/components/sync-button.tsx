@@ -29,8 +29,8 @@ export default function SyncButton() {
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setState("done");
-        setMessage(`Synced ${data.runs ?? 0} runs · ${data.sleep ?? 0} nights`);
-        // Refresh client data pages (Runs, Sleep) and server components (dashboard)
+        setMessage(`Synced ${data.activities ?? 0} activities · ${data.sleep ?? 0} nights`);
+        // Refresh client data pages (Activities, Sleep) and server components (dashboard)
         // so freshly synced data appears without a manual reload.
         window.dispatchEvent(new CustomEvent("forma:synced", { detail: data }));
         router.refresh();

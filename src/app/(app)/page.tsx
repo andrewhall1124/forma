@@ -3,12 +3,19 @@ export const dynamic = "force-dynamic";
 import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { db } from "@/db";
-import { meals, waterLogs, sleepLogs, runs } from "@/db/schema";
+import { meals, waterLogs, sleepLogs, activities } from "@/db/schema";
 import { desc, eq, sql, and } from "drizzle-orm";
 import { localDateStr, DEFAULT_TIME_ZONE } from "@/lib/date";
 
 function formatDist(m: number) {
   return (m / 1609.34).toFixed(2) + " mi";
+}
+
+function formatDuration(secs: number) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 function formatSleep(secs: number) {
@@ -22,7 +29,7 @@ export default async function Dashboard() {
   const tz = (await cookies()).get("tz")?.value || DEFAULT_TIME_ZONE;
   const today = localDateStr(tz);
 
-  const [[macroRow], [waterRow], [lastSleep], [lastRun]] = await Promise.all([
+  const [[macroRow], [waterRow], [lastSleep], [lastActivity]] = await Promise.all([
     db
       .select({
         calories: sql<number>`coalesce(sum(coalesce(${meals.calories}, 0) * coalesce(${meals.servings}, 1)), 0)`,
@@ -37,7 +44,7 @@ export default async function Dashboard() {
       .from(waterLogs)
       .where(and(eq(waterLogs.userId, userId!), eq(waterLogs.date, today))),
     db.select().from(sleepLogs).where(eq(sleepLogs.userId, userId!)).orderBy(desc(sleepLogs.date)).limit(1),
-    db.select().from(runs).where(eq(runs.userId, userId!)).orderBy(desc(runs.date)).limit(1),
+    db.select().from(activities).where(eq(activities.userId, userId!)).orderBy(desc(activities.date)).limit(1),
   ]);
 
   const calories = macroRow?.calories ?? 0;
@@ -76,10 +83,20 @@ export default async function Dashboard() {
           progressColor="bg-[#a98fb0]"
         />
         <StatCard
-          label="Last Run"
-          value={lastRun?.distanceMeters ? formatDist(lastRun.distanceMeters) : "—"}
+          label="Last Activity"
+          value={
+            lastActivity?.distanceMeters
+              ? formatDist(lastActivity.distanceMeters)
+              : lastActivity?.durationSeconds
+              ? formatDuration(lastActivity.durationSeconds)
+              : "—"
+          }
           unit=""
-          sub={lastRun?.date ?? "no data"}
+          sub={
+            lastActivity
+              ? [lastActivity.activityType, lastActivity.date].filter(Boolean).join(" · ")
+              : "no data"
+          }
         />
       </div>
     </div>

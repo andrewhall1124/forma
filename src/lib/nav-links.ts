@@ -10,6 +10,6 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Home", icon: Home },
   { href: "/meals", label: "Meals", icon: UtensilsCrossed },
   { href: "/water", label: "Water", icon: Droplets },
-  { href: "/runs", label: "Runs", icon: Activity },
+  { href: "/activities", label: "Activities", icon: Activity },
   { href: "/sleep", label: "Sleep", icon: Moon },
 ];

@@ -9,10 +9,13 @@ import {
   json,
 } from "drizzle-orm/pg-core";
 
-export const runs = pgTable("runs", {
+export const activities = pgTable("activities", {
   id: serial("id").primaryKey(),
   userId: text("user_id"),
   garminActivityId: text("garmin_activity_id").unique(),
+  // Normalized category: run | walk | ride | strength | swim | other
+  activityType: text("activity_type"),
+  name: text("name"),
   date: date("date").notNull(),
   distanceMeters: real("distance_meters"),
   durationSeconds: integer("duration_seconds"),

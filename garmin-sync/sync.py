@@ -22,17 +22,33 @@ def get_db_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
-def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
+def categorize_activity(type_key: str) -> str:
+    """Map Garmin's many activityType typeKeys into a small set of buckets.
+
+    Garmin has dozens of typeKeys (running, trail_running, road_biking,
+    indoor_cycling, strength_training, …); substring matching keeps us robust
+    to ones we haven't seen without an exhaustive list.
+    """
+    k = (type_key or "").lower()
+    if "swim" in k:
+        return "swim"
+    if "run" in k:
+        return "run"
+    if "walk" in k or "hik" in k:
+        return "walk"
+    if "cycl" in k or "bik" in k or k == "bmx":
+        return "ride"
+    if "strength" in k or "weight" in k:
+        return "strength"
+    return "other"
+
+
+def sync_activities(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
     activities = garmin.get_activities(start=0, limit=100)
 
-    running_keys = {"running", "trail_running", "treadmill_running", "track_running"}
-    running = [
-        a for a in activities
-        if a.get("activityType", {}).get("typeKey", "") in running_keys
-    ]
-
+    synced = 0
     with conn.cursor() as cur:
-        for a in running:
+        for a in activities:
             activity_id = str(a.get("activityId", ""))
             start_time = a.get("startTimeLocal", "")
             activity_date = start_time[:10] if start_time else None
@@ -41,6 +57,10 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str =
 
             if (date.today() - date.fromisoformat(activity_date)).days > days:
                 continue
+
+            type_key = a.get("activityType", {}).get("typeKey", "")
+            activity_type = categorize_activity(type_key)
+            name = a.get("activityName")
 
             distance = a.get("distance")
             duration = a.get("duration")
@@ -54,14 +74,17 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str =
 
             cur.execute(
                 """
-                INSERT INTO runs
-                    (garmin_activity_id, date, user_id, distance_meters, duration_seconds,
+                INSERT INTO activities
+                    (garmin_activity_id, date, user_id, activity_type, name,
+                     distance_meters, duration_seconds,
                      avg_pace_seconds_per_km, avg_heart_rate, max_heart_rate,
                      calories, elevation_gain_meters)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (garmin_activity_id) DO UPDATE SET
                     date                    = EXCLUDED.date,
                     user_id                 = EXCLUDED.user_id,
+                    activity_type           = EXCLUDED.activity_type,
+                    name                    = EXCLUDED.name,
                     distance_meters         = EXCLUDED.distance_meters,
                     duration_seconds        = EXCLUDED.duration_seconds,
                     avg_pace_seconds_per_km = EXCLUDED.avg_pace_seconds_per_km,
@@ -74,6 +97,8 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str =
                     activity_id,
                     activity_date,
                     user_id,
+                    activity_type,
+                    name,
                     distance,
                     int(duration) if duration is not None else None,
                     avg_pace,
@@ -83,9 +108,10 @@ def sync_runs(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str =
                     elevation,
                 ),
             )
+            synced += 1
 
     conn.commit()
-    return len(running)
+    return synced
 
 
 def extract_sleep_score(daily: dict) -> int | None:
@@ -202,8 +228,8 @@ def run_sync(days: int = 30, email: str = None, password: str = None, user_id: s
     garmin = get_garmin_client(email=email, password=password)
     conn = get_db_conn()
     try:
-        n_runs = sync_runs(garmin, conn, days=days, user_id=user_id)
-        logger.info("Runs synced: %d", n_runs)
+        n_activities = sync_activities(garmin, conn, days=days, user_id=user_id)
+        logger.info("Activities synced: %d", n_activities)
 
         sleep = sync_sleep(garmin, conn, days=min(days, 14), user_id=user_id)
         logger.info("Sleep nights synced: %d", sleep)
@@ -211,6 +237,6 @@ def run_sync(days: int = 30, email: str = None, password: str = None, user_id: s
         body = sync_body_composition(garmin, conn, days=days, user_id=user_id)
         logger.info("Body composition records synced: %d", body)
 
-        return {"status": "ok", "runs": n_runs, "sleep": sleep, "body": body}
+        return {"status": "ok", "activities": n_activities, "sleep": sleep, "body": body}
     finally:
         conn.close()
