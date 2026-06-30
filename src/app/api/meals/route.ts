@@ -17,6 +17,16 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(meals.createdAt));
     return Response.json(rows);
   }
+
+  // Catalog: one row per distinct meal name (most recently logged), alphabetical.
+  if (req.nextUrl.searchParams.get("catalog")) {
+    const rows = await db
+      .selectDistinctOn([meals.name])
+      .from(meals)
+      .where(eq(meals.userId, userId))
+      .orderBy(meals.name, desc(meals.createdAt));
+    return Response.json(rows);
+  }
   const rows = await db
     .select()
     .from(meals)

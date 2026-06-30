@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp, Type } from "lucide-react";
+import Link from "next/link";
+import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp, Type, BookOpen } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { localDateStr } from "@/lib/date";
 
 type Ingredient = {
   name: string;
@@ -43,8 +45,17 @@ type Analysis = {
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 
+const MACRO_FIELDS = [
+  { key: "calories", label: "kcal" },
+  { key: "proteinG", label: "protein" },
+  { key: "carbsG", label: "carbs" },
+  { key: "fatG", label: "fat" },
+] as const;
+
+type MacroKey = (typeof MACRO_FIELDS)[number]["key"];
+
 function todayStr() {
-  return new Date().toISOString().split("T")[0];
+  return localDateStr();
 }
 
 export default function MealsPage() {
@@ -249,6 +260,11 @@ export default function MealsPage() {
     setServings((s) => Math.max(0.5, parseFloat((s + delta).toFixed(1))));
   }
 
+  // Inputs show the serving-scaled total; store the per-serving base value.
+  function setMacro(key: MacroKey, total: number) {
+    setAnalysis((a) => (a ? { ...a, [key]: servings ? total / servings : total } : a));
+  }
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-end justify-between">
@@ -262,13 +278,22 @@ export default function MealsPage() {
             <span>F <span className="text-neutral-300 font-medium">{Math.round(totalFat)}g</span></span>
           </div>
         </div>
-        <button
-          onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium hover:bg-blue-500 active:bg-blue-700"
-        >
-          <Plus size={16} />
-          Add Meal
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/meals/catalog"
+            className="flex items-center gap-2 rounded-full border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 active:bg-neutral-700"
+          >
+            <BookOpen size={16} />
+            Catalog
+          </Link>
+          <button
+            onClick={() => setIsOpen(true)}
+            className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium hover:bg-blue-500 active:bg-blue-700"
+          >
+            <Plus size={16} />
+            Add Meal
+          </button>
+        </div>
       </div>
 
       {mealList.length === 0 ? (
@@ -535,18 +560,27 @@ export default function MealsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { label: "kcal", value: Math.round(analysis.calories * servings) },
-                      { label: "protein", value: `${Math.round(analysis.proteinG * servings)}g` },
-                      { label: "carbs", value: `${Math.round(analysis.carbsG * servings)}g` },
-                      { label: "fat", value: `${Math.round(analysis.fatG * servings)}g` },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="rounded-lg bg-neutral-800 p-3 text-center">
-                        <p className="text-lg font-bold">{value}</p>
-                        <p className="text-xs text-neutral-400">{label}</p>
-                      </div>
-                    ))}
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-neutral-500 uppercase tracking-wide">
+                      Nutrition{" "}
+                      <span className="normal-case tracking-normal text-neutral-600">· tap to adjust</span>
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {MACRO_FIELDS.map(({ key, label }) => (
+                        <div key={key} className="rounded-lg bg-neutral-800 p-3 text-center">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            value={Math.round(analysis[key] * servings)}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => setMacro(key, Math.max(0, parseFloat(e.target.value) || 0))}
+                            className="w-full bg-transparent text-center text-lg font-bold tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                          <p className="text-xs text-neutral-400">{label}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {analysis.ingredients && analysis.ingredients.length > 0 && (
