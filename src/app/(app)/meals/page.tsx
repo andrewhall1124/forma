@@ -321,7 +321,7 @@ export default function MealsPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs text-neutral-400">Today</p>
           <p className="text-3xl font-bold">{Math.round(totalCalories)}</p>
@@ -335,14 +335,14 @@ export default function MealsPage() {
         <div className="flex items-center gap-2">
           <Link
             href="/meals/catalog"
-            className="flex items-center gap-2 rounded-full border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 active:bg-neutral-700"
+            className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 active:bg-neutral-700"
           >
             <BookOpen size={16} />
             Catalog
           </Link>
           <button
             onClick={() => setIsOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-accent-500 text-neutral-950 px-4 py-2.5 text-sm font-medium hover:bg-accent-400 active:bg-accent-600"
+            className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full bg-accent-500 text-neutral-950 px-4 py-2.5 text-sm font-medium hover:bg-accent-400 active:bg-accent-600"
           >
             <Plus size={16} />
             Add Meal
