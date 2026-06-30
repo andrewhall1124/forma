@@ -13,6 +13,9 @@ type Ingredient = {
   proteinG: number;
   carbsG: number;
   fatG: number;
+  // In-form only: a quantity multiplier on the base (qty=1) macros above.
+  // Baked into the macros + amount label on save; never persisted.
+  qty?: number;
 };
 
 type Meal = {
@@ -218,7 +221,21 @@ export default function MealsPage() {
         fatG: analysis.fatG,
         fiberG: analysis.fiberG,
         servings,
-        ingredients: analysis.ingredients?.length ? analysis.ingredients : null,
+        // Bake each ingredient's quantity multiplier into its macros + amount
+        // label so the stored shape stays {name, amount, ...macros} with no qty.
+        ingredients: analysis.ingredients?.length
+          ? analysis.ingredients.map((ing) => {
+              const q = ing.qty ?? 1;
+              return {
+                name: ing.name,
+                amount: q !== 1 ? `${ing.amount} ×${q}` : ing.amount,
+                calories: ing.calories * q,
+                proteinG: ing.proteinG * q,
+                carbsG: ing.carbsG * q,
+                fatG: ing.fatG * q,
+              };
+            })
+          : null,
       };
 
       if (editingMeal) {
@@ -263,6 +280,43 @@ export default function MealsPage() {
   // Inputs show the serving-scaled total; store the per-serving base value.
   function setMacro(key: MacroKey, total: number) {
     setAnalysis((a) => (a ? { ...a, [key]: servings ? total / servings : total } : a));
+  }
+
+  // Scale a single ingredient by a quantity multiplier and roll the change
+  // into the meal totals (delta-based, so other manual edits are preserved).
+  function adjustIngredientQty(index: number, delta: number) {
+    setAnalysis((a) => {
+      if (!a) return a;
+      const ing = a.ingredients[index];
+      const oldQty = ing.qty ?? 1;
+      const newQty = Math.max(0.5, parseFloat((oldQty + delta).toFixed(1)));
+      const f = newQty - oldQty;
+      if (f === 0) return a;
+      return {
+        ...a,
+        calories: a.calories + ing.calories * f,
+        proteinG: a.proteinG + ing.proteinG * f,
+        carbsG: a.carbsG + ing.carbsG * f,
+        fatG: a.fatG + ing.fatG * f,
+        ingredients: a.ingredients.map((x, i) => (i === index ? { ...x, qty: newQty } : x)),
+      };
+    });
+  }
+
+  function removeIngredient(index: number) {
+    setAnalysis((a) => {
+      if (!a) return a;
+      const ing = a.ingredients[index];
+      const q = ing.qty ?? 1;
+      return {
+        ...a,
+        calories: a.calories - ing.calories * q,
+        proteinG: a.proteinG - ing.proteinG * q,
+        carbsG: a.carbsG - ing.carbsG * q,
+        fatG: a.fatG - ing.fatG * q,
+        ingredients: a.ingredients.filter((_, i) => i !== index),
+      };
+    });
   }
 
   return (
@@ -585,19 +639,46 @@ export default function MealsPage() {
 
                   {analysis.ingredients && analysis.ingredients.length > 0 && (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-neutral-500 uppercase tracking-wide">Ingredients</p>
+                      <p className="text-xs text-neutral-500 uppercase tracking-wide">
+                        Ingredients{" "}
+                        <span className="normal-case tracking-normal text-neutral-600">· adjust quantity</span>
+                      </p>
                       <div className="rounded-xl bg-neutral-800 divide-y divide-neutral-700">
-                        {analysis.ingredients.map((ing, i) => (
-                          <div key={i} className="flex items-center justify-between px-4 py-2.5">
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm text-neutral-200 truncate">{ing.name}</span>
-                              <span className="text-xs text-neutral-500 ml-2">{ing.amount}</span>
+                        {analysis.ingredients.map((ing, i) => {
+                          const q = ing.qty ?? 1;
+                          return (
+                            <div key={i} className="flex items-center gap-2 px-3 py-2.5">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-neutral-200 truncate">{ing.name}</p>
+                                <p className="text-xs text-neutral-500 truncate">
+                                  {ing.amount}
+                                  {q !== 1 ? ` ×${q}` : ""} · {Math.round(ing.calories * q * servings)} kcal
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  onClick={() => adjustIngredientQty(i, -0.5)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-700 hover:bg-neutral-600 active:bg-neutral-500 transition-colors"
+                                >
+                                  <Minus size={12} />
+                                </button>
+                                <span className="text-sm font-semibold w-7 text-center tabular-nums">{q}</span>
+                                <button
+                                  onClick={() => adjustIngredientQty(i, 0.5)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-700 hover:bg-neutral-600 active:bg-neutral-500 transition-colors"
+                                >
+                                  <Plus size={12} />
+                                </button>
+                                <button
+                                  onClick={() => removeIngredient(i)}
+                                  className="w-7 h-7 flex items-center justify-center text-neutral-500 hover:text-red-400 transition-colors"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
                             </div>
-                            <span className="text-xs text-neutral-400 shrink-0 ml-3 tabular-nums">
-                              {Math.round(ing.calories * servings)} kcal
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
