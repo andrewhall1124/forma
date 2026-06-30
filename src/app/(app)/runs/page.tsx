@@ -47,10 +47,15 @@ export default function RunsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/runs?limit=20")
-      .then((r) => r.json())
-      .then(setRunList)
-      .finally(() => setLoading(false));
+    function loadRuns() {
+      fetch("/api/runs?limit=20")
+        .then((r) => r.json())
+        .then(setRunList)
+        .finally(() => setLoading(false));
+    }
+    loadRuns();
+    window.addEventListener("forma:synced", loadRuns);
+    return () => window.removeEventListener("forma:synced", loadRuns);
   }, []);
 
   const chartData = [...runList]

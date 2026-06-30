@@ -41,10 +41,15 @@ export default function SleepPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/sleep?limit=14")
-      .then((r) => r.json())
-      .then(setSleepList)
-      .finally(() => setLoading(false));
+    function loadSleep() {
+      fetch("/api/sleep?limit=14")
+        .then((r) => r.json())
+        .then(setSleepList)
+        .finally(() => setLoading(false));
+    }
+    loadSleep();
+    window.addEventListener("forma:synced", loadSleep);
+    return () => window.removeEventListener("forma:synced", loadSleep);
   }, []);
 
   const chartData = [...sleepList]
