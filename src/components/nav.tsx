@@ -17,7 +17,7 @@ export default function Nav() {
             className={cn(
               "flex flex-col items-center gap-1 flex-1 py-3 text-xs",
               pathname === href
-                ? "text-white"
+                ? "text-accent-400"
                 : "text-neutral-500 hover:text-neutral-300"
             )}
           >

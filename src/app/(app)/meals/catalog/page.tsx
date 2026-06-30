@@ -131,7 +131,7 @@ export default function CatalogPage() {
                   className={
                     added
                       ? "flex items-center gap-1.5 rounded-full bg-green-600/20 text-green-400 px-3 py-2 text-xs font-medium shrink-0"
-                      : "flex items-center gap-1.5 rounded-full bg-blue-600 px-3 py-2 text-xs font-medium hover:bg-blue-500 active:bg-blue-700 shrink-0"
+                      : "flex items-center gap-1.5 rounded-full bg-accent-500 text-neutral-950 px-3 py-2 text-xs font-medium hover:bg-accent-400 active:bg-accent-600 shrink-0"
                   }
                 >
                   {added ? <><Check size={14} /> Added</> : <><Plus size={14} /> Today</>}

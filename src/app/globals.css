@@ -3,3 +3,47 @@
 @theme inline {
   --font-sans: var(--font-geist-sans);
 }
+
+/*
+  forma theme — warm espresso.
+  The whole UI is built on Tailwind's neutral scale, so remapping neutral to a
+  set of warm browns re-skins the app in one place. `accent` is the keystone
+  amber from the logo; `blue` is retuned to a calm denim for water.
+*/
+@theme {
+  --color-neutral-50:  #faf5ee;
+  --color-neutral-100: #f4ece0;
+  --color-neutral-200: #e7ddcd;
+  --color-neutral-300: #d4c4ae;
+  --color-neutral-400: #b8a78d;
+  --color-neutral-500: #9a836d;
+  --color-neutral-600: #6f5a45;
+  --color-neutral-700: #3f3022;
+  --color-neutral-800: #2e2218;
+  --color-neutral-900: #1f160e;
+  --color-neutral-950: #160f0a;
+
+  /* keystone amber — brand / primary actions */
+  --color-accent-300: #f3cd92;
+  --color-accent-400: #ecb878;
+  --color-accent-500: #dd9f57;
+  --color-accent-600: #c6863f;
+
+  /* water — calm denim */
+  --color-blue-300: #b2cadd;
+  --color-blue-400: #8aa9c2;
+  --color-blue-500: #5d83a4;
+  --color-blue-600: #4c6e8e;
+}
+
+body {
+  background-color: var(--color-neutral-950);
+  background-image:
+    radial-gradient(70% 55% at 50% -8%, rgba(221, 159, 87, 0.08), transparent 70%),
+    radial-gradient(50% 40% at 100% 0%, rgba(221, 159, 87, 0.04), transparent 70%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background-color: rgba(221, 159, 87, 0.3);
+}

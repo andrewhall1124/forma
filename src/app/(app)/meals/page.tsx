@@ -342,7 +342,7 @@ export default function MealsPage() {
           </Link>
           <button
             onClick={() => setIsOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2.5 text-sm font-medium hover:bg-blue-500 active:bg-blue-700"
+            className="flex items-center gap-2 rounded-full bg-accent-500 text-neutral-950 px-4 py-2.5 text-sm font-medium hover:bg-accent-400 active:bg-accent-600"
           >
             <Plus size={16} />
             Add Meal
@@ -464,7 +464,7 @@ export default function MealsPage() {
                         className={cn(
                           "rounded-lg py-2 text-xs capitalize font-medium border transition-colors",
                           mealType === t
-                            ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                            ? "border-accent-500 bg-accent-500/20 text-accent-300"
                             : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
                         )}
                       >
@@ -531,7 +531,7 @@ export default function MealsPage() {
                       <button
                         onClick={handleText}
                         disabled={!textInput.trim()}
-                        className="w-full rounded-xl bg-blue-600 py-3 text-sm font-medium hover:bg-blue-500 disabled:opacity-40 transition-colors"
+                        className="w-full rounded-xl bg-accent-500 text-neutral-950 py-3 text-sm font-medium hover:bg-accent-400 disabled:opacity-40 transition-colors"
                       >
                         Analyze
                       </button>
@@ -691,7 +691,7 @@ export default function MealsPage() {
                         className={cn(
                           "rounded-lg py-2 text-xs capitalize font-medium border transition-colors",
                           mealType === t
-                            ? "border-blue-500 bg-blue-500/20 text-blue-300"
+                            ? "border-accent-500 bg-accent-500/20 text-accent-300"
                             : "border-neutral-700 text-neutral-400"
                         )}
                       >
@@ -725,7 +725,7 @@ export default function MealsPage() {
                     <button
                       onClick={handleSave}
                       disabled={saving}
-                      className="flex items-center justify-center gap-2 flex-1 rounded-xl bg-blue-600 py-3 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+                      className="flex items-center justify-center gap-2 flex-1 rounded-xl bg-accent-500 text-neutral-950 py-3 text-sm font-medium hover:bg-accent-400 disabled:opacity-50"
                     >
                       {saving ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

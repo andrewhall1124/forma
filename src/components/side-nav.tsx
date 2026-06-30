@@ -6,6 +6,7 @@ import { Settings } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/cn";
 import { NAV_LINKS } from "@/lib/nav-links";
+import { Logo } from "./logo";
 import SyncButton from "./sync-button";
 
 export default function SideNav() {
@@ -13,7 +14,7 @@ export default function SideNav() {
   return (
     <aside className="hidden md:flex flex-col w-52 shrink-0 border-r border-neutral-800 sticky top-0 h-screen">
       <div className="px-5 h-14 flex items-center border-b border-neutral-800 shrink-0">
-        <span className="text-lg font-bold tracking-tight">Forma</span>
+        <Logo />
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {NAV_LINKS.map(({ href, label, icon: Icon }) => (
@@ -23,8 +24,8 @@ export default function SideNav() {
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
               pathname === href
-                ? "bg-neutral-800 text-white"
-                : "text-neutral-400 hover:text-white hover:bg-neutral-800/60"
+                ? "bg-accent-500/10 text-accent-300"
+                : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60"
             )}
           >
             <Icon size={18} />
@@ -38,8 +39,8 @@ export default function SideNav() {
           className={cn(
             "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
             pathname === "/settings"
-              ? "bg-neutral-800 text-white"
-              : "text-neutral-400 hover:text-white hover:bg-neutral-800/60"
+              ? "bg-accent-500/10 text-accent-300"
+              : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60"
           )}
         >
           <Settings size={18} />

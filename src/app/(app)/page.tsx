@@ -73,7 +73,7 @@ export default async function Dashboard() {
           unit=""
           sub={lastSleep ? `score ${lastSleep.sleepScore ?? "—"} · ${lastSleep.date}` : "no data"}
           progress={lastSleep?.totalSleepSeconds ? lastSleep.totalSleepSeconds / (8 * 3600) : undefined}
-          progressColor="bg-purple-500"
+          progressColor="bg-[#a98fb0]"
         />
         <StatCard
           label="Last Run"
@@ -102,7 +102,7 @@ function StatCard({
   progressColor?: string;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 transition-colors hover:border-neutral-700">
       <p className="text-xs text-neutral-400">{label}</p>
       <p className="mt-1 text-2xl font-bold">
         {value}
@@ -168,10 +168,10 @@ function NutritionCard({
         <p className="text-xs text-neutral-400">Nutrition</p>
         <p className="text-xs text-neutral-500">today</p>
       </div>
-      <MacroRow label="Calories" value={calories} target={3400} unit="kcal" color="bg-orange-500" />
-      <MacroRow label="Carbs" value={carbs} target={462} unit="g" color="bg-amber-400" />
-      <MacroRow label="Protein" value={protein} target={165} unit="g" color="bg-blue-500" />
-      <MacroRow label="Fat" value={fat} target={90} unit="g" color="bg-emerald-500" />
+      <MacroRow label="Calories" value={calories} target={3400} unit="kcal" color="bg-[#dd9f57]" />
+      <MacroRow label="Carbs" value={carbs} target={462} unit="g" color="bg-[#e7b86a]" />
+      <MacroRow label="Protein" value={protein} target={165} unit="g" color="bg-[#c47a52]" />
+      <MacroRow label="Fat" value={fat} target={90} unit="g" color="bg-[#9a9b63]" />
     </div>
   );
 }
