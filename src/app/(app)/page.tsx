@@ -1,13 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { db } from "@/db";
 import { meals, waterLogs, sleepLogs, runs } from "@/db/schema";
 import { desc, eq, sql, and } from "drizzle-orm";
-
-function todayStr() {
-  return new Date().toISOString().split("T")[0];
-}
+import { localDateStr, DEFAULT_TIME_ZONE } from "@/lib/date";
 
 function formatDist(m: number) {
   return (m / 1609.34).toFixed(2) + " mi";
@@ -21,7 +19,8 @@ function formatSleep(secs: number) {
 
 export default async function Dashboard() {
   const { userId } = await auth();
-  const today = todayStr();
+  const tz = (await cookies()).get("tz")?.value || DEFAULT_TIME_ZONE;
+  const today = localDateStr(tz);
 
   const [[macroRow], [waterRow], [lastSleep], [lastRun]] = await Promise.all([
     db
@@ -50,7 +49,7 @@ export default async function Dashboard() {
   return (
     <div className="p-4 space-y-4">
       <p className="text-sm font-medium text-neutral-400">
-        {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+        {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: tz })}
       </p>
 
       <div className="grid grid-cols-2 gap-3">

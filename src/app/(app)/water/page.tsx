@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Droplets, Plus } from "lucide-react";
+import { localDateStr } from "@/lib/date";
 
 type WaterLog = {
   id: number;
@@ -14,7 +15,7 @@ const QUICK_ADD = [250, 500, 750, 1000];
 const DAILY_GOAL_ML = 2500;
 
 function todayStr() {
-  return new Date().toISOString().split("T")[0];
+  return localDateStr();
 }
 
 function formatTime(iso: string) {

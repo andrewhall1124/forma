@@ -4,10 +4,12 @@ import Link from "next/link";
 import Nav from "@/components/nav";
 import SideNav from "@/components/side-nav";
 import SyncButton from "@/components/sync-button";
+import TimezoneSync from "@/components/timezone-sync";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
+      <TimezoneSync />
       <SideNav />
 
       <div className="flex-1 flex flex-col min-w-0">
