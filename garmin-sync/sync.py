@@ -184,7 +184,10 @@ def sync_activities(garmin: garminconnect.Garmin, conn, days: int = 30, user_id:
                 ),
             )
             synced += 1
-            lap_ids.append(activity_id)
+            # Strength sessions have no meaningful splits (just sets/rest), so
+            # skip the extra lap request for them.
+            if activity_type != "strength":
+                lap_ids.append(activity_id)
 
     conn.commit()
 

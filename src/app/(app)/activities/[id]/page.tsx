@@ -105,6 +105,8 @@ export default function ActivityDetailPage() {
   const { label, icon: Icon } = meta(activity.activityType);
   const isRide = activity.activityType === "ride";
   const hasDistance = activity.distanceMeters != null && activity.distanceMeters > 0;
+  // Laps (splits) are meaningless for strength — those are just sets/rest.
+  const showLaps = activity.activityType !== "strength";
 
   const hero = hasDistance
     ? `${toMiles(activity.distanceMeters!).toFixed(2)} mi`
@@ -171,7 +173,7 @@ export default function ActivityDetailPage() {
         )}
       </div>
 
-      {laps.length === 0 ? (
+      {!showLaps ? null : laps.length === 0 ? (
         <p className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-center text-sm text-neutral-500">
           No lap data for this activity. Re-sync with Garmin to pull splits for
           recent activities.
