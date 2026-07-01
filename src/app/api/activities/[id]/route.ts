@@ -1,0 +1,34 @@
+import { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { db } from "@/db";
+import { activities, activityLaps } from "@/db/schema";
+import { eq, and, asc } from "drizzle-orm";
+
+export async function GET(_req: NextRequest, ctx: RouteContext<"/api/activities/[id]">) {
+  const { userId } = await auth();
+  if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await ctx.params;
+
+  const [activity] = await db
+    .select()
+    .from(activities)
+    .where(and(eq(activities.id, parseInt(id)), eq(activities.userId, userId)));
+
+  if (!activity) return Response.json({ error: "Not found" }, { status: 404 });
+
+  const laps = activity.garminActivityId
+    ? await db
+        .select()
+        .from(activityLaps)
+        .where(
+          and(
+            eq(activityLaps.garminActivityId, activity.garminActivityId),
+            eq(activityLaps.userId, userId),
+          ),
+        )
+        .orderBy(asc(activityLaps.lapIndex))
+    : [];
+
+  return Response.json({ activity, laps });
+}

@@ -7,6 +7,7 @@ import {
   timestamp,
   date,
   json,
+  unique,
 } from "drizzle-orm/pg-core";
 
 export const activities = pgTable("activities", {
@@ -26,6 +27,32 @@ export const activities = pgTable("activities", {
   elevationGainMeters: real("elevation_gain_meters"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Per-lap (split) breakdown for a synced activity. Linked to the parent by
+// garmin_activity_id so the Python sync can upsert laps without knowing our
+// internal serial ids. lap_index is 1-based and preserves Garmin's order.
+export const activityLaps = pgTable(
+  "activity_laps",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id"),
+    garminActivityId: text("garmin_activity_id"),
+    lapIndex: integer("lap_index").notNull(),
+    distanceMeters: real("distance_meters"),
+    durationSeconds: integer("duration_seconds"),
+    avgPaceSecondsPerKm: integer("avg_pace_seconds_per_km"),
+    avgSpeedMps: real("avg_speed_mps"),
+    maxSpeedMps: real("max_speed_mps"),
+    avgHeartRate: integer("avg_heart_rate"),
+    maxHeartRate: integer("max_heart_rate"),
+    avgCadence: integer("avg_cadence"),
+    calories: integer("calories"),
+    elevationGainMeters: real("elevation_gain_meters"),
+    elevationLossMeters: real("elevation_loss_meters"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [unique().on(t.garminActivityId, t.lapIndex)],
+);
 
 export const sleepLogs = pgTable("sleep_logs", {
   id: serial("id").primaryKey(),

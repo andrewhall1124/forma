@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Activity, Footprints, Bike, Dumbbell, Waves, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -11,6 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { cn } from "@/lib/cn";
+import { meta, toMiles, formatPace, formatSpeed, formatDuration } from "@/lib/activity";
 
 type ActivityRow = {
   id: number;
@@ -26,21 +28,6 @@ type ActivityRow = {
   elevationGainMeters: number | null;
 };
 
-const MI = 1609.34;
-
-const TYPE_META: Record<string, { label: string; icon: LucideIcon }> = {
-  run: { label: "Run", icon: Activity },
-  walk: { label: "Walk", icon: Footprints },
-  ride: { label: "Ride", icon: Bike },
-  strength: { label: "Strength", icon: Dumbbell },
-  swim: { label: "Swim", icon: Waves },
-  other: { label: "Activity", icon: Activity },
-};
-
-function meta(type: string | null) {
-  return TYPE_META[type ?? "other"] ?? TYPE_META.other;
-}
-
 // Filter chips — "all" plus the types we expect to see often.
 const FILTERS: { key: string; label: string }[] = [
   { key: "all", label: "All" },
@@ -49,29 +36,6 @@ const FILTERS: { key: string; label: string }[] = [
   { key: "ride", label: "Rides" },
   { key: "strength", label: "Strength" },
 ];
-
-function toMiles(meters: number) {
-  return meters / MI;
-}
-
-function formatPace(secsPerKm: number) {
-  const secsPerMile = Math.round(secsPerKm * 1.60934);
-  const mins = Math.floor(secsPerMile / 60);
-  const secs = secsPerMile % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}/mi`;
-}
-
-function formatSpeed(meters: number, secs: number) {
-  const mph = (meters / MI) / (secs / 3600);
-  return `${mph.toFixed(1)} mph`;
-}
-
-function formatDuration(secs: number) {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
 
 export default function ActivitiesPage() {
   const [list, setList] = useState<ActivityRow[]>([]);
@@ -192,9 +156,10 @@ export default function ActivitiesPage() {
                 .join(" · ");
 
               return (
-                <div
+                <Link
                   key={a.id}
-                  className="rounded-xl border border-neutral-800 bg-neutral-900 p-4"
+                  href={`/activities/${a.id}`}
+                  className="block rounded-xl border border-neutral-800 bg-neutral-900 p-4 transition-colors hover:border-neutral-700"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex gap-3 min-w-0">
@@ -209,19 +174,22 @@ export default function ActivitiesPage() {
                         {detail && <p className="text-xs text-neutral-500 mt-0.5">{detail}</p>}
                       </div>
                     </div>
-                    <div className="text-right shrink-0 ml-3">
-                      <p className="text-xs text-neutral-400">{a.date}</p>
-                      {a.calories != null && (
-                        <p className="text-xs text-neutral-500 mt-0.5">{a.calories} kcal</p>
-                      )}
-                      {a.elevationGainMeters != null && a.elevationGainMeters > 0 && (
-                        <p className="text-xs text-neutral-500 mt-0.5">
-                          ↑ {Math.round(a.elevationGainMeters * 3.28084)} ft
-                        </p>
-                      )}
+                    <div className="flex items-start gap-1 shrink-0 ml-3">
+                      <div className="text-right">
+                        <p className="text-xs text-neutral-400">{a.date}</p>
+                        {a.calories != null && (
+                          <p className="text-xs text-neutral-500 mt-0.5">{a.calories} kcal</p>
+                        )}
+                        {a.elevationGainMeters != null && a.elevationGainMeters > 0 && (
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            ↑ {Math.round(a.elevationGainMeters * 3.28084)} ft
+                          </p>
+                        )}
+                      </div>
+                      <ChevronRight size={16} className="mt-0.5 text-neutral-600" />
                     </div>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

@@ -43,10 +43,85 @@ def categorize_activity(type_key: str) -> str:
     return "other"
 
 
+def sync_activity_laps(garmin: garminconnect.Garmin, conn, activity_id: str, user_id: str = None) -> int:
+    """Fetch and store the per-lap (split) breakdown for a single activity.
+
+    Garmin's splits endpoint returns a ``lapDTOs`` list; each lap carries the
+    same shape of metrics we already store on the activity summary. Laps are
+    upserted on (garmin_activity_id, lap_index) so re-syncing is idempotent.
+    """
+    try:
+        data = garmin.get_activity_splits(activity_id)
+    except Exception as exc:
+        logger.warning("Lap fetch failed for %s: %s", activity_id, exc)
+        return 0
+
+    # The splits endpoint returns laps under "lapDTOs"; fall back to "splits"
+    # in case a future API/library version reshapes the payload.
+    laps = (data or {}).get("lapDTOs") or (data or {}).get("splits") or []
+    if not laps:
+        return 0
+
+    with conn.cursor() as cur:
+        for i, lap in enumerate(laps, start=1):
+            avg_speed = lap.get("averageSpeed")
+            max_speed = lap.get("maxSpeed")
+            avg_hr = lap.get("averageHR")
+            max_hr = lap.get("maxHR")
+            duration = lap.get("duration")
+            calories = lap.get("calories")
+            cadence = lap.get("averageRunCadence") or lap.get("averageBikeCadence")
+            avg_pace = int(1000 / avg_speed) if avg_speed and avg_speed > 0 else None
+
+            cur.execute(
+                """
+                INSERT INTO activity_laps
+                    (garmin_activity_id, lap_index, user_id, distance_meters,
+                     duration_seconds, avg_pace_seconds_per_km, avg_speed_mps,
+                     max_speed_mps, avg_heart_rate, max_heart_rate, avg_cadence,
+                     calories, elevation_gain_meters, elevation_loss_meters)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (garmin_activity_id, lap_index) DO UPDATE SET
+                    user_id                 = EXCLUDED.user_id,
+                    distance_meters         = EXCLUDED.distance_meters,
+                    duration_seconds        = EXCLUDED.duration_seconds,
+                    avg_pace_seconds_per_km = EXCLUDED.avg_pace_seconds_per_km,
+                    avg_speed_mps           = EXCLUDED.avg_speed_mps,
+                    max_speed_mps           = EXCLUDED.max_speed_mps,
+                    avg_heart_rate          = EXCLUDED.avg_heart_rate,
+                    max_heart_rate          = EXCLUDED.max_heart_rate,
+                    avg_cadence             = EXCLUDED.avg_cadence,
+                    calories                = EXCLUDED.calories,
+                    elevation_gain_meters   = EXCLUDED.elevation_gain_meters,
+                    elevation_loss_meters   = EXCLUDED.elevation_loss_meters
+                """,
+                (
+                    activity_id,
+                    i,
+                    user_id,
+                    lap.get("distance"),
+                    int(duration) if duration is not None else None,
+                    avg_pace,
+                    avg_speed,
+                    max_speed,
+                    int(avg_hr) if avg_hr is not None else None,
+                    int(max_hr) if max_hr is not None else None,
+                    int(cadence) if cadence is not None else None,
+                    int(calories) if calories is not None else None,
+                    lap.get("elevationGain"),
+                    lap.get("elevationLoss"),
+                ),
+            )
+
+    conn.commit()
+    return len(laps)
+
+
 def sync_activities(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
     activities = garmin.get_activities(start=0, limit=100)
 
     synced = 0
+    lap_ids: list[str] = []
     with conn.cursor() as cur:
         for a in activities:
             activity_id = str(a.get("activityId", ""))
@@ -109,8 +184,15 @@ def sync_activities(garmin: garminconnect.Garmin, conn, days: int = 30, user_id:
                 ),
             )
             synced += 1
+            lap_ids.append(activity_id)
 
     conn.commit()
+
+    # Fetch per-lap splits for each activity we just synced. This is a separate
+    # Garmin request per activity, so it runs after the summary upserts commit.
+    for aid in lap_ids:
+        sync_activity_laps(garmin, conn, aid, user_id=user_id)
+
     return synced
 
 
