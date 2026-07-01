@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from datetime import date, timedelta
 
@@ -117,11 +118,146 @@ def sync_activity_laps(garmin: garminconnect.Garmin, conn, activity_id: str, use
     return len(laps)
 
 
+def fetch_hr_zones(garmin: garminconnect.Garmin, activity_id: str):
+    """Time spent in each heart-rate zone, normalized to a small shape."""
+    try:
+        data = garmin.get_activity_hr_in_timezones(activity_id)
+    except Exception as exc:
+        logger.warning("HR zones fetch failed for %s: %s", activity_id, exc)
+        return None
+
+    zones = []
+    for z in data or []:
+        secs = z.get("secsInZone")
+        if secs is None:
+            continue
+        zones.append(
+            {
+                "zoneNumber": z.get("zoneNumber"),
+                "secsInZone": round(secs),
+                "zoneLowBoundary": z.get("zoneLowBoundary"),
+            }
+        )
+    return zones or None
+
+
+def fetch_exercise_sets(garmin: garminconnect.Garmin, activity_id: str):
+    """Per-set exercise breakdown for a strength activity (active sets only)."""
+    try:
+        data = garmin.get_activity_exercise_sets(activity_id)
+    except Exception as exc:
+        logger.warning("Exercise sets fetch failed for %s: %s", activity_id, exc)
+        return None
+
+    out = []
+    for s in (data or {}).get("exerciseSets") or []:
+        if s.get("setType") != "ACTIVE":
+            continue
+        exercises = s.get("exercises") or []
+        first = exercises[0] if exercises else {}
+        weight_g = s.get("weight")
+        duration = s.get("duration")
+        out.append(
+            {
+                "exercise": first.get("name"),
+                "category": first.get("category"),
+                "reps": s.get("repetitionCount"),
+                "weightKg": round(weight_g / 1000, 1) if weight_g else None,
+                "durationSeconds": round(duration) if duration else None,
+            }
+        )
+    return out or None
+
+
+# Time-series keys we pull from the details payload, mapped to our stream names.
+_STREAM_KEYS = {
+    "sumDistance": "distance",   # meters
+    "directHeartRate": "hr",     # bpm
+    "directSpeed": "speed",      # m/s
+    "directElevation": "elevation",  # meters
+}
+
+
+def fetch_streams(garmin: garminconnect.Garmin, activity_id: str):
+    """Downsampled time series (distance/HR/speed/elevation) for charts."""
+    try:
+        data = garmin.get_activity_details(activity_id, maxchart=200, maxpoly=0)
+    except Exception as exc:
+        logger.warning("Details fetch failed for %s: %s", activity_id, exc)
+        return None
+
+    descriptors = (data or {}).get("metricDescriptors") or []
+    rows = (data or {}).get("activityDetailMetrics") or []
+    if not descriptors or not rows:
+        return None
+
+    # Map the Garmin metric key -> its column index in each row's "metrics".
+    index_for = {}
+    for d in descriptors:
+        key = d.get("key")
+        if key in _STREAM_KEYS:
+            index_for[key] = d.get("metricsIndex")
+
+    streams = {}
+    for key, name in _STREAM_KEYS.items():
+        i = index_for.get(key)
+        if i is None:
+            continue
+        series = []
+        for r in rows:
+            metrics = r.get("metrics") or []
+            series.append(metrics[i] if i < len(metrics) else None)
+        if any(v is not None for v in series):
+            streams[name] = series
+
+    # Distance is the x-axis; without it the series aren't chartable here.
+    return streams if "distance" in streams else None
+
+
+def sync_activity_details(
+    garmin: garminconnect.Garmin, conn, activity_id: str, activity_type: str, user_id: str = None
+) -> bool:
+    """Fetch and upsert HR zones, strength sets, and time-series streams.
+
+    Sets are only fetched for strength; streams only for non-strength (the
+    elevation/pace series is meaningless for lifting). HR zones apply to all.
+    """
+    hr_zones = fetch_hr_zones(garmin, activity_id)
+    exercise_sets = fetch_exercise_sets(garmin, activity_id) if activity_type == "strength" else None
+    streams = fetch_streams(garmin, activity_id) if activity_type != "strength" else None
+
+    if hr_zones is None and exercise_sets is None and streams is None:
+        return False
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO activity_details
+                (garmin_activity_id, user_id, hr_zones, exercise_sets, streams)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (garmin_activity_id) DO UPDATE SET
+                user_id       = EXCLUDED.user_id,
+                hr_zones      = EXCLUDED.hr_zones,
+                exercise_sets = EXCLUDED.exercise_sets,
+                streams       = EXCLUDED.streams
+            """,
+            (
+                activity_id,
+                user_id,
+                json.dumps(hr_zones) if hr_zones is not None else None,
+                json.dumps(exercise_sets) if exercise_sets is not None else None,
+                json.dumps(streams) if streams is not None else None,
+            ),
+        )
+    conn.commit()
+    return True
+
+
 def sync_activities(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
     activities = garmin.get_activities(start=0, limit=100)
 
     synced = 0
-    lap_ids: list[str] = []
+    synced_ids: list[tuple[str, str]] = []
     with conn.cursor() as cur:
         for a in activities:
             activity_id = str(a.get("activityId", ""))
@@ -147,26 +283,48 @@ def sync_activities(garmin: garminconnect.Garmin, conn, days: int = 30, user_id:
 
             avg_pace = int(1000 / avg_speed) if avg_speed and avg_speed > 0 else None
 
+            # Cadence key differs by sport; running is in steps/min, cycling in
+            # rev/min. Store whichever is present.
+            cadence = (
+                a.get("averageRunningCadenceInStepsPerMinute")
+                or a.get("averageBikingCadenceInRevPerMinute")
+            )
+            moving_duration = a.get("movingDuration")
+            avg_power = a.get("avgPower")
+            aerobic_te = a.get("aerobicTrainingEffect")
+            anaerobic_te = a.get("anaerobicTrainingEffect")
+            stride = a.get("avgStrideLength")  # centimeters
+
             cur.execute(
                 """
                 INSERT INTO activities
                     (garmin_activity_id, date, user_id, activity_type, name,
                      distance_meters, duration_seconds,
                      avg_pace_seconds_per_km, avg_heart_rate, max_heart_rate,
-                     calories, elevation_gain_meters)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     calories, elevation_gain_meters, avg_cadence,
+                     moving_duration_seconds, avg_power_watts,
+                     aerobic_training_effect, anaerobic_training_effect,
+                     avg_stride_length_cm)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s)
                 ON CONFLICT (garmin_activity_id) DO UPDATE SET
-                    date                    = EXCLUDED.date,
-                    user_id                 = EXCLUDED.user_id,
-                    activity_type           = EXCLUDED.activity_type,
-                    name                    = EXCLUDED.name,
-                    distance_meters         = EXCLUDED.distance_meters,
-                    duration_seconds        = EXCLUDED.duration_seconds,
-                    avg_pace_seconds_per_km = EXCLUDED.avg_pace_seconds_per_km,
-                    avg_heart_rate          = EXCLUDED.avg_heart_rate,
-                    max_heart_rate          = EXCLUDED.max_heart_rate,
-                    calories                = EXCLUDED.calories,
-                    elevation_gain_meters   = EXCLUDED.elevation_gain_meters
+                    date                      = EXCLUDED.date,
+                    user_id                   = EXCLUDED.user_id,
+                    activity_type             = EXCLUDED.activity_type,
+                    name                      = EXCLUDED.name,
+                    distance_meters           = EXCLUDED.distance_meters,
+                    duration_seconds          = EXCLUDED.duration_seconds,
+                    avg_pace_seconds_per_km   = EXCLUDED.avg_pace_seconds_per_km,
+                    avg_heart_rate            = EXCLUDED.avg_heart_rate,
+                    max_heart_rate            = EXCLUDED.max_heart_rate,
+                    calories                  = EXCLUDED.calories,
+                    elevation_gain_meters     = EXCLUDED.elevation_gain_meters,
+                    avg_cadence               = EXCLUDED.avg_cadence,
+                    moving_duration_seconds   = EXCLUDED.moving_duration_seconds,
+                    avg_power_watts           = EXCLUDED.avg_power_watts,
+                    aerobic_training_effect   = EXCLUDED.aerobic_training_effect,
+                    anaerobic_training_effect = EXCLUDED.anaerobic_training_effect,
+                    avg_stride_length_cm      = EXCLUDED.avg_stride_length_cm
                 """,
                 (
                     activity_id,
@@ -181,20 +339,26 @@ def sync_activities(garmin: garminconnect.Garmin, conn, days: int = 30, user_id:
                     int(max_hr) if max_hr is not None else None,
                     int(calories) if calories is not None else None,
                     elevation,
+                    int(cadence) if cadence is not None else None,
+                    int(moving_duration) if moving_duration is not None else None,
+                    avg_power,
+                    aerobic_te,
+                    anaerobic_te,
+                    stride,
                 ),
             )
             synced += 1
-            # Strength sessions have no meaningful splits (just sets/rest), so
-            # skip the extra lap request for them.
-            if activity_type != "strength":
-                lap_ids.append(activity_id)
+            synced_ids.append((activity_id, activity_type))
 
     conn.commit()
 
-    # Fetch per-lap splits for each activity we just synced. This is a separate
-    # Garmin request per activity, so it runs after the summary upserts commit.
-    for aid in lap_ids:
-        sync_activity_laps(garmin, conn, aid, user_id=user_id)
+    # Each of these makes extra per-activity Garmin requests, so they run after
+    # the summary upserts commit. Splits/streams are skipped for strength (just
+    # sets/rest); HR zones and exercise sets are handled inside the details sync.
+    for aid, atype in synced_ids:
+        if atype != "strength":
+            sync_activity_laps(garmin, conn, aid, user_id=user_id)
+        sync_activity_details(garmin, conn, aid, atype, user_id=user_id)
 
     return synced
 

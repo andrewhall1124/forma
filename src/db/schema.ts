@@ -25,6 +25,29 @@ export const activities = pgTable("activities", {
   maxHeartRate: integer("max_heart_rate"),
   calories: integer("calories"),
   elevationGainMeters: real("elevation_gain_meters"),
+  // Extra summary metrics Garmin already returns on the activity list.
+  avgCadence: integer("avg_cadence"),
+  movingDurationSeconds: integer("moving_duration_seconds"),
+  avgPowerWatts: real("avg_power_watts"),
+  aerobicTrainingEffect: real("aerobic_training_effect"),
+  anaerobicTrainingEffect: real("anaerobic_training_effect"),
+  avgStrideLengthCm: real("avg_stride_length_cm"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Detail-only data fetched per activity via extra Garmin requests. Kept out of
+// the activities row so the list query stays lean; loaded only on the detail
+// page. All three payloads are stored as JSON:
+//   hrZones      — [{ zoneNumber, secsInZone, zoneLowBoundary }]
+//   exerciseSets — strength sets [{ exercise, category, reps, weightKg, durationSeconds }]
+//   streams      — downsampled time series { distance[], hr[], speed[], elevation[] }
+export const activityDetails = pgTable("activity_details", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id"),
+  garminActivityId: text("garmin_activity_id").unique(),
+  hrZones: json("hr_zones"),
+  exerciseSets: json("exercise_sets"),
+  streams: json("streams"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
-import { activities, activityLaps } from "@/db/schema";
+import { activities, activityLaps, activityDetails } from "@/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 
 export async function GET(_req: NextRequest, ctx: RouteContext<"/api/activities/[id]">) {
@@ -30,5 +30,12 @@ export async function GET(_req: NextRequest, ctx: RouteContext<"/api/activities/
         .orderBy(asc(activityLaps.lapIndex))
     : [];
 
-  return Response.json({ activity, laps });
+  const [details] = activity.garminActivityId
+    ? await db
+        .select()
+        .from(activityDetails)
+        .where(eq(activityDetails.garminActivityId, activity.garminActivityId))
+    : [];
+
+  return Response.json({ activity, laps, details: details ?? null });
 }
