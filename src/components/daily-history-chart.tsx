@@ -62,6 +62,9 @@ export function DailyHistoryChart({
           {goal != null && (
             <ReferenceLine
               y={goal}
+              // Without this, recharts discards the line whenever the goal
+              // sits above every bar (the axis auto-domain stops at dataMax).
+              ifOverflow="extendDomain"
               stroke="#6b7280"
               strokeDasharray="4 3"
               label={{ value: goalLabel, position: "insideTopRight", fontSize: 10, fill: "#6b7280" }}
