@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp, Type, BookOpen } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { localDateStr } from "@/lib/date";
+import { localDateStr, lastNDateStrs } from "@/lib/date";
+import { DailyHistoryChart } from "@/components/daily-history-chart";
 
 type Ingredient = {
   name: string;
@@ -48,6 +49,26 @@ type Analysis = {
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 
+type NutritionDay = {
+  date: string;
+  calories: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+};
+
+const HISTORY_DAYS = 30;
+
+// Daily targets and colors match the dashboard's nutrition card.
+const HISTORY_METRICS = [
+  { key: "calories", label: "Calories", unit: " kcal", target: 3400, color: "#dd9f57" },
+  { key: "proteinG", label: "Protein", unit: "g", target: 165, color: "#c47a52" },
+  { key: "carbsG", label: "Carbs", unit: "g", target: 462, color: "#e7b86a" },
+  { key: "fatG", label: "Fat", unit: "g", target: 90, color: "#9a9b63" },
+] as const;
+
+type HistoryMetricKey = (typeof HISTORY_METRICS)[number]["key"];
+
 const MACRO_FIELDS = [
   { key: "calories", label: "kcal" },
   { key: "proteinG", label: "protein" },
@@ -64,6 +85,8 @@ function todayStr() {
 export default function MealsPage() {
   const [mealList, setMealList] = useState<Meal[]>([]);
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
+  const [history, setHistory] = useState<NutritionDay[]>([]);
+  const [historyMetric, setHistoryMetric] = useState<HistoryMetricKey>("calories");
   const [expandedMealId, setExpandedMealId] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
@@ -98,15 +121,29 @@ export default function MealsPage() {
     );
   }
 
+  async function loadHistory() {
+    const start = lastNDateStrs(HISTORY_DAYS)[0];
+    const res = await fetch(`/api/meals/history?start=${start}`);
+    setHistory(await res.json());
+  }
+
   useEffect(() => {
     loadMeals();
     loadRecent();
+    loadHistory();
   }, []);
 
   const totalCalories = mealList.reduce((sum, m) => sum + (m.calories ?? 0) * (m.servings ?? 1), 0);
   const totalProtein = mealList.reduce((sum, m) => sum + (m.proteinG ?? 0) * (m.servings ?? 1), 0);
   const totalCarbs = mealList.reduce((sum, m) => sum + (m.carbsG ?? 0) * (m.servings ?? 1), 0);
   const totalFat = mealList.reduce((sum, m) => sum + (m.fatG ?? 0) * (m.servings ?? 1), 0);
+
+  const historyMetricDef = HISTORY_METRICS.find((m) => m.key === historyMetric)!;
+  const historyByDate = new Map(history.map((d) => [d.date, d]));
+  const historyChartData = lastNDateStrs(HISTORY_DAYS).map((d) => ({
+    date: d.slice(5),
+    value: Math.round(historyByDate.get(d)?.[historyMetric] ?? 0),
+  }));
 
   function handleEdit(meal: Meal) {
     setEditingMeal(meal);
@@ -131,6 +168,7 @@ export default function MealsPage() {
     setMealList((prev) => prev.filter((m) => m.id !== meal.id));
     await fetch(`/api/meals/${meal.id}`, { method: "DELETE" });
     loadRecent();
+    loadHistory();
   }
 
   function handleRecentMeal(meal: Meal) {
@@ -254,6 +292,7 @@ export default function MealsPage() {
 
       await loadMeals();
       loadRecent();
+      loadHistory();
       handleClose();
     } finally {
       setSaving(false);
@@ -431,6 +470,40 @@ export default function MealsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <div className="space-y-2 pt-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+              Last {HISTORY_DAYS} Days
+            </p>
+            <div className="flex gap-1">
+              {HISTORY_METRICS.map((m) => (
+                <button
+                  key={m.key}
+                  onClick={() => setHistoryMetric(m.key)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
+                    historyMetric === m.key
+                      ? "border-accent-500 bg-accent-500/20 text-accent-300"
+                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DailyHistoryChart
+            data={historyChartData}
+            color={historyMetricDef.color}
+            unit={historyMetricDef.unit}
+            label={historyMetricDef.label}
+            goal={historyMetricDef.target}
+            goalLabel={`${historyMetricDef.target}${historyMetricDef.unit} target`}
+          />
         </div>
       )}
 

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Droplets, Plus } from "lucide-react";
-import { localDateStr } from "@/lib/date";
+import { localDateStr, lastNDateStrs } from "@/lib/date";
+import { DailyHistoryChart } from "@/components/daily-history-chart";
 
 type WaterLog = {
   id: number;
@@ -11,8 +12,14 @@ type WaterLog = {
   loggedAt: string;
 };
 
+type WaterDay = {
+  date: string;
+  totalMl: number;
+};
+
 const QUICK_ADD = [250, 500, 750, 1000];
 const DAILY_GOAL_ML = 2500;
+const HISTORY_DAYS = 30;
 
 function todayStr() {
   return localDateStr();
@@ -24,6 +31,7 @@ function formatTime(iso: string) {
 
 export default function WaterPage() {
   const [logs, setLogs] = useState<WaterLog[]>([]);
+  const [history, setHistory] = useState<WaterDay[]>([]);
   const [adding, setAdding] = useState(false);
 
   async function loadLogs() {
@@ -31,10 +39,29 @@ export default function WaterPage() {
     setLogs(await res.json());
   }
 
-  useEffect(() => { loadLogs(); }, []);
+  async function loadHistory() {
+    const start = lastNDateStrs(HISTORY_DAYS)[0];
+    const res = await fetch(`/api/water/history?start=${start}`);
+    setHistory(await res.json());
+  }
+
+  useEffect(() => {
+    loadLogs();
+    loadHistory();
+  }, []);
 
   const totalMl = logs.reduce((sum, l) => sum + l.amountMl, 0);
   const progress = Math.min(1, totalMl / DAILY_GOAL_ML);
+
+  const mlByDate = new Map(history.map((d) => [d.date, d.totalMl]));
+  const chartData = lastNDateStrs(HISTORY_DAYS).map((d) => ({
+    date: d.slice(5),
+    value: (mlByDate.get(d) ?? 0) / 1000,
+  }));
+  const daysLogged = history.length;
+  const avgMl = daysLogged > 0
+    ? history.reduce((sum, d) => sum + d.totalMl, 0) / daysLogged
+    : 0;
 
   async function addWater(ml: number) {
     if (adding) return;
@@ -45,7 +72,7 @@ export default function WaterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: todayStr(), amountMl: ml }),
       });
-      await loadLogs();
+      await Promise.all([loadLogs(), loadHistory()]);
     } finally {
       setAdding(false);
     }
@@ -99,6 +126,27 @@ export default function WaterPage() {
           </button>
         ))}
       </div>
+
+      {daysLogged > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+              Last {HISTORY_DAYS} Days
+            </p>
+            <p className="text-xs text-neutral-500">
+              avg {(avgMl / 1000).toFixed(1)} L on days logged
+            </p>
+          </div>
+          <DailyHistoryChart
+            data={chartData}
+            color="#5d83a4"
+            unit=" L"
+            label="Water"
+            goal={DAILY_GOAL_ML / 1000}
+            goalLabel={`${(DAILY_GOAL_ML / 1000).toFixed(1)}L goal`}
+          />
+        </div>
+      )}
 
       {logs.length > 0 && (
         <div className="space-y-2">

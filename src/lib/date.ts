@@ -19,3 +19,13 @@ export function localDateStr(timeZone?: string, date: Date = new Date()): string
     day: "2-digit",
   }).format(date);
 }
+
+// The last `n` local calendar days as YYYY-MM-DD strings, oldest first,
+// ending today. Used to zero-fill history charts so days with no logs render
+// as empty slots instead of silently compressing the x-axis.
+export function lastNDateStrs(n: number, timeZone?: string): string[] {
+  const now = Date.now();
+  return Array.from({ length: n }, (_, i) =>
+    localDateStr(timeZone, new Date(now - (n - 1 - i) * 86_400_000))
+  );
+}
