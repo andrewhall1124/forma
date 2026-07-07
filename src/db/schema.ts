@@ -142,6 +142,39 @@ export const waterLogs = pgTable("water_logs", {
   loggedAt: timestamp("logged_at").defaultNow(),
 });
 
+// Coach ↔ athlete relationship. The athlete generates an invite code (row
+// starts with coach_user_id null + status "pending"); a coach redeems the
+// code, which sets coach_user_id and flips status to "active". Being a coach
+// is purely relational — there is no separate role concept.
+export const coachLinks = pgTable("coach_links", {
+  id: serial("id").primaryKey(),
+  athleteUserId: text("athlete_user_id").notNull(),
+  coachUserId: text("coach_user_id"),
+  inviteCode: text("invite_code").unique(),
+  // pending | active | revoked
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// A prescribed workout: what a coach (or the athlete themself, coach_user_id
+// null) plans for a given day — distinct from `activities`, which records
+// what Garmin actually synced.
+export const plannedWorkouts = pgTable("planned_workouts", {
+  id: serial("id").primaryKey(),
+  athleteUserId: text("athlete_user_id").notNull(),
+  coachUserId: text("coach_user_id"),
+  date: date("date").notNull(),
+  // Same normalized categories as activities, plus "rest" for off days.
+  activityType: text("activity_type"),
+  title: text("title").notNull(),
+  description: text("description"),
+  durationSeconds: integer("duration_seconds"),
+  distanceMeters: real("distance_meters"),
+  // planned | completed | skipped
+  status: text("status").notNull().default("planned"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const garminConnections = pgTable("garmin_connections", {
   userId: text("user_id").primaryKey(),
   email: text("email").notNull(),
