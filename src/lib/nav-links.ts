@@ -1,4 +1,4 @@
-import { Home, UtensilsCrossed, Droplets, Activity, Moon, LucideIcon } from "lucide-react";
+import { Home, UtensilsCrossed, Droplets, Activity, Moon, Footprints, LucideIcon } from "lucide-react";
 
 export type NavLink = {
   href: string;
@@ -11,5 +11,6 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/meals", label: "Meals", icon: UtensilsCrossed },
   { href: "/water", label: "Water", icon: Droplets },
   { href: "/activities", label: "Activities", icon: Activity },
+  { href: "/steps", label: "Steps", icon: Footprints },
   { href: "/sleep", label: "Sleep", icon: Moon },
 ];

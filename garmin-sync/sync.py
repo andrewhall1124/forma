@@ -425,6 +425,76 @@ def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14, user_id: str 
     return synced
 
 
+def sync_daily_summaries(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
+    """Daily wellness totals (steps, floors climbed) from the user summary.
+
+    One Garmin request per day, same as sleep. Days the watch hasn't synced
+    yet come back with totalSteps=None and are skipped rather than stored as
+    zeros.
+    """
+    today = date.today()
+    synced = 0
+
+    with conn.cursor() as cur:
+        # Self-migrating: matches the drizzle definition in src/db/schema.ts.
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS daily_summaries (
+                id serial PRIMARY KEY,
+                user_id text,
+                date date NOT NULL UNIQUE,
+                steps integer,
+                step_goal integer,
+                floors_ascended integer,
+                floors_descended integer,
+                floors_goal integer,
+                created_at timestamp DEFAULT now()
+            )
+            """
+        )
+        for i in range(days):
+            date_str = (today - timedelta(days=i)).isoformat()
+            try:
+                data = garmin.get_user_summary(date_str) or {}
+                steps = data.get("totalSteps")
+                if steps is None:
+                    continue
+
+                floors_up = data.get("floorsAscended")
+                floors_down = data.get("floorsDescended")
+
+                cur.execute(
+                    """
+                    INSERT INTO daily_summaries
+                        (date, user_id, steps, step_goal, floors_ascended,
+                         floors_descended, floors_goal)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (date) DO UPDATE SET
+                        user_id          = EXCLUDED.user_id,
+                        steps            = EXCLUDED.steps,
+                        step_goal        = EXCLUDED.step_goal,
+                        floors_ascended  = EXCLUDED.floors_ascended,
+                        floors_descended = EXCLUDED.floors_descended,
+                        floors_goal      = EXCLUDED.floors_goal
+                    """,
+                    (
+                        date_str,
+                        user_id,
+                        int(steps),
+                        data.get("dailyStepGoal"),
+                        round(floors_up) if floors_up is not None else None,
+                        round(floors_down) if floors_down is not None else None,
+                        data.get("userFloorsAscendedGoal"),
+                    ),
+                )
+                synced += 1
+            except Exception as exc:
+                logger.warning("Daily summary sync failed for %s: %s", date_str, exc)
+
+    conn.commit()
+    return synced
+
+
 def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30, user_id: str = None) -> int:
     today = date.today()
     start = (today - timedelta(days=days)).isoformat()
@@ -486,6 +556,15 @@ def run_sync(days: int = 30, email: str = None, password: str = None, user_id: s
         body = sync_body_composition(garmin, conn, days=days, user_id=user_id)
         logger.info("Body composition records synced: %d", body)
 
-        return {"status": "ok", "activities": n_activities, "sleep": sleep, "body": body}
+        daily = sync_daily_summaries(garmin, conn, days=days, user_id=user_id)
+        logger.info("Daily summaries synced: %d", daily)
+
+        return {
+            "status": "ok",
+            "activities": n_activities,
+            "sleep": sleep,
+            "body": body,
+            "daily": daily,
+        }
     finally:
         conn.close()

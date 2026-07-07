@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
 import { db } from "@/db";
-import { meals, waterLogs, sleepLogs, activities } from "@/db/schema";
+import { meals, waterLogs, sleepLogs, activities, dailySummaries } from "@/db/schema";
 import { desc, eq, sql, and } from "drizzle-orm";
 import { localDateStr, DEFAULT_TIME_ZONE } from "@/lib/date";
 
@@ -29,7 +29,7 @@ export default async function Dashboard() {
   const tz = (await cookies()).get("tz")?.value || DEFAULT_TIME_ZONE;
   const today = localDateStr(tz);
 
-  const [[macroRow], [waterRow], [lastSleep], [lastActivity]] = await Promise.all([
+  const [[macroRow], [waterRow], [lastSleep], [lastActivity], [todaySummary]] = await Promise.all([
     db
       .select({
         calories: sql<number>`coalesce(sum(coalesce(${meals.calories}, 0) * coalesce(${meals.servings}, 1)), 0)`,
@@ -45,6 +45,11 @@ export default async function Dashboard() {
       .where(and(eq(waterLogs.userId, userId!), eq(waterLogs.date, today))),
     db.select().from(sleepLogs).where(eq(sleepLogs.userId, userId!)).orderBy(desc(sleepLogs.date)).limit(1),
     db.select().from(activities).where(eq(activities.userId, userId!)).orderBy(desc(activities.date)).limit(1),
+    db
+      .select()
+      .from(dailySummaries)
+      .where(and(eq(dailySummaries.userId, userId!), eq(dailySummaries.date, today)))
+      .limit(1),
   ]);
 
   const calories = macroRow?.calories ?? 0;
@@ -52,6 +57,10 @@ export default async function Dashboard() {
   const carbs = macroRow?.carbs ?? 0;
   const fat = macroRow?.fat ?? 0;
   const waterMl = waterRow?.total ?? 0;
+  const steps = todaySummary?.steps ?? 0;
+  const stepGoal = todaySummary?.stepGoal ?? 10000;
+  const floors = todaySummary?.floorsAscended ?? 0;
+  const floorsGoal = todaySummary?.floorsGoal ?? 10;
 
   return (
     <div className="p-4 space-y-4">
@@ -73,6 +82,26 @@ export default async function Dashboard() {
           sub={`${Math.round(Math.min(100, (waterMl / 2500) * 100))}% of 2.5L goal`}
           progress={waterMl / 2500}
           progressColor="bg-blue-500"
+        />
+        <StatCard
+          label="Steps"
+          value={todaySummary ? steps.toLocaleString() : "—"}
+          unit=""
+          sub={
+            todaySummary
+              ? `${Math.round(Math.min(100, (steps / stepGoal) * 100))}% of ${stepGoal.toLocaleString()} goal`
+              : "no data"
+          }
+          progress={todaySummary ? steps / stepGoal : undefined}
+          progressColor="bg-green-500"
+        />
+        <StatCard
+          label="Floors"
+          value={todaySummary ? floors : "—"}
+          unit={todaySummary ? "floors" : ""}
+          sub={todaySummary ? `${Math.round(Math.min(100, (floors / floorsGoal) * 100))}% of ${floorsGoal} goal` : "no data"}
+          progress={todaySummary ? floors / floorsGoal : undefined}
+          progressColor="bg-[#b08a5a]"
         />
         <StatCard
           label="Sleep"

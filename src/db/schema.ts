@@ -101,6 +101,20 @@ export const bodyComposition = pgTable("body_composition", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// One row per calendar day of Garmin wellness data (steps, floors climbed).
+// Goals are stored per-day because Garmin's auto step goal changes over time.
+export const dailySummaries = pgTable("daily_summaries", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id"),
+  date: date("date").notNull().unique(),
+  steps: integer("steps"),
+  stepGoal: integer("step_goal"),
+  floorsAscended: integer("floors_ascended"),
+  floorsDescended: integer("floors_descended"),
+  floorsGoal: integer("floors_goal"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const meals = pgTable("meals", {
   id: serial("id").primaryKey(),
   userId: text("user_id"),
