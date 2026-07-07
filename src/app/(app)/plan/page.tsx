@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
+  BookmarkCheck,
+  BookmarkPlus,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -29,6 +31,15 @@ type PlannedWorkout = {
   durationSeconds: number | null;
   distanceMeters: number | null;
   status: "planned" | "completed" | "skipped";
+};
+
+type WorkoutTemplate = {
+  id: number;
+  activityType: string | null;
+  title: string;
+  description: string | null;
+  durationSeconds: number | null;
+  distanceMeters: number | null;
 };
 
 const PLAN_TYPE_META: Record<string, { label: string; icon: LucideIcon }> = {
@@ -92,6 +103,18 @@ export default function PlanPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  // Workout id whose "save to catalog" just succeeded, for brief feedback.
+  const [savedToCatalog, setSavedToCatalog] = useState<number | null>(null);
+
+  const loadTemplates = useCallback(async () => {
+    const res = await fetch("/api/workout-templates");
+    if (res.ok) setTemplates(await res.json());
+  }, []);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
 
   const loadWorkouts = useCallback(async () => {
     setLoading(true);
@@ -177,6 +200,43 @@ export default function PlanPage() {
     if (!confirm(`Delete "${w.title}"?`)) return;
     await fetch(`/api/planned-workouts/${w.id}`, { method: "DELETE" });
     await loadWorkouts();
+  }
+
+  async function saveToCatalog(w: PlannedWorkout) {
+    const res = await fetch("/api/workout-templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        activityType: w.activityType,
+        title: w.title,
+        description: w.description,
+        durationSeconds: w.durationSeconds,
+        distanceMeters: w.distanceMeters,
+      }),
+    });
+    if (res.ok) {
+      setSavedToCatalog(w.id);
+      setTimeout(() => setSavedToCatalog((cur) => (cur === w.id ? null : cur)), 1500);
+      await loadTemplates();
+    }
+  }
+
+  async function removeTemplate(t: WorkoutTemplate) {
+    if (!confirm(`Remove "${t.title}" from catalog?`)) return;
+    await fetch(`/api/workout-templates/${t.id}`, { method: "DELETE" });
+    await loadTemplates();
+  }
+
+  function applyTemplate(t: WorkoutTemplate) {
+    if (!form) return;
+    setForm({
+      ...form,
+      activityType: t.activityType ?? "other",
+      title: t.title,
+      description: t.description ?? "",
+      durationMin: t.durationSeconds ? String(Math.round(t.durationSeconds / 60)) : "",
+      distanceMi: t.distanceMeters ? (t.distanceMeters / MI).toFixed(2) : "",
+    });
   }
 
   return (
@@ -286,6 +346,23 @@ export default function PlanPage() {
                               </span>
                             )}
                             <button
+                              onClick={() => saveToCatalog(w)}
+                              className={cn(
+                                "p-1.5 transition-colors",
+                                savedToCatalog === w.id
+                                  ? "text-accent-400"
+                                  : "text-neutral-500 hover:text-accent-400",
+                              )}
+                              aria-label="Save to catalog"
+                              title="Save to catalog"
+                            >
+                              {savedToCatalog === w.id ? (
+                                <BookmarkCheck size={14} />
+                              ) : (
+                                <BookmarkPlus size={14} />
+                              )}
+                            </button>
+                            <button
                               onClick={() => openEdit(w)}
                               className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
                               aria-label="Edit"
@@ -365,6 +442,44 @@ export default function PlanPage() {
                 <X size={16} />
               </button>
             </div>
+            {form.id === null && templates.length > 0 && (
+              <div>
+                <label className="text-xs text-neutral-400">From catalog</label>
+                <div className="mt-1 max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                  {templates.map((t) => {
+                    const { label } = PLAN_TYPE_META[t.activityType ?? "other"] ?? PLAN_TYPE_META.other;
+                    const bits = [
+                      label,
+                      t.durationSeconds ? formatDuration(t.durationSeconds) : null,
+                      t.distanceMeters ? `${(t.distanceMeters / MI).toFixed(1)} mi` : null,
+                    ].filter(Boolean);
+                    return (
+                      <div
+                        key={t.id}
+                        className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => applyTemplate(t)}
+                          className="flex-1 min-w-0 px-3 py-2 text-left hover:bg-neutral-700/60 rounded-l-lg transition-colors"
+                        >
+                          <p className="text-sm font-medium truncate">{t.title}</p>
+                          <p className="text-xs text-neutral-500">{bits.join(" · ")}</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeTemplate(t)}
+                          className="p-2 shrink-0 text-neutral-600 hover:text-red-400 transition-colors"
+                          aria-label={`Remove ${t.title} from catalog`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs text-neutral-400">Title</label>
               <input

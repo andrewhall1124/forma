@@ -187,6 +187,25 @@ export const plannedWorkouts = pgTable("planned_workouts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// A reusable workout that can be dropped into any plan. Rows are created by
+// saving an already-planned workout ("add to catalog") and are owned by
+// whoever saved them, so a coach's catalog follows them across athletes.
+// Re-saving the same title overwrites the template (upsert on owner+title).
+export const workoutTemplates = pgTable(
+  "workout_templates",
+  {
+    id: serial("id").primaryKey(),
+    ownerUserId: text("owner_user_id").notNull(),
+    activityType: text("activity_type"),
+    title: text("title").notNull(),
+    description: text("description"),
+    durationSeconds: integer("duration_seconds"),
+    distanceMeters: real("distance_meters"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [unique().on(t.ownerUserId, t.title)],
+);
+
 export const garminConnections = pgTable("garmin_connections", {
   userId: text("user_id").primaryKey(),
   email: text("email").notNull(),
