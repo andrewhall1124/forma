@@ -397,8 +397,7 @@ def sync_sleep(garmin: garminconnect.Garmin, conn, days: int = 14, user_id: str 
                          light_sleep_seconds, rem_sleep_seconds,
                          awake_sleep_seconds, sleep_score)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (date) DO UPDATE SET
-                        user_id             = EXCLUDED.user_id,
+                    ON CONFLICT (user_id, date) DO UPDATE SET
                         total_sleep_seconds = EXCLUDED.total_sleep_seconds,
                         deep_sleep_seconds  = EXCLUDED.deep_sleep_seconds,
                         light_sleep_seconds = EXCLUDED.light_sleep_seconds,
@@ -469,8 +468,7 @@ def sync_daily_summaries(garmin: garminconnect.Garmin, conn, days: int = 30, use
                         (date, user_id, steps, step_goal, floors_ascended,
                          floors_descended, floors_goal)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (date) DO UPDATE SET
-                        user_id          = EXCLUDED.user_id,
+                    ON CONFLICT (user_id, date) DO UPDATE SET
                         steps            = EXCLUDED.steps,
                         step_goal        = EXCLUDED.step_goal,
                         floors_ascended  = EXCLUDED.floors_ascended,
@@ -521,8 +519,7 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30, us
                 INSERT INTO body_composition
                     (date, user_id, weight_kg, body_fat_pct, muscle_mass_kg, bmi)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (date) DO UPDATE SET
-                    user_id        = EXCLUDED.user_id,
+                ON CONFLICT (user_id, date) DO UPDATE SET
                     weight_kg      = EXCLUDED.weight_kg,
                     body_fat_pct   = EXCLUDED.body_fat_pct,
                     muscle_mass_kg = EXCLUDED.muscle_mass_kg,

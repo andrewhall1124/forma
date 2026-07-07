@@ -77,43 +77,55 @@ export const activityLaps = pgTable(
   (t) => [unique().on(t.garminActivityId, t.lapIndex)],
 );
 
-export const sleepLogs = pgTable("sleep_logs", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id"),
-  date: date("date").notNull().unique(),
-  totalSleepSeconds: integer("total_sleep_seconds"),
-  deepSleepSeconds: integer("deep_sleep_seconds"),
-  lightSleepSeconds: integer("light_sleep_seconds"),
-  remSleepSeconds: integer("rem_sleep_seconds"),
-  awakeSleepSeconds: integer("awake_sleep_seconds"),
-  sleepScore: integer("sleep_score"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const sleepLogs = pgTable(
+  "sleep_logs",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id"),
+    date: date("date").notNull(),
+    totalSleepSeconds: integer("total_sleep_seconds"),
+    deepSleepSeconds: integer("deep_sleep_seconds"),
+    lightSleepSeconds: integer("light_sleep_seconds"),
+    remSleepSeconds: integer("rem_sleep_seconds"),
+    awakeSleepSeconds: integer("awake_sleep_seconds"),
+    sleepScore: integer("sleep_score"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.date)],
+);
 
-export const bodyComposition = pgTable("body_composition", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id"),
-  date: date("date").notNull().unique(),
-  weightKg: real("weight_kg"),
-  bodyFatPct: real("body_fat_pct"),
-  muscleMassKg: real("muscle_mass_kg"),
-  bmi: real("bmi"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const bodyComposition = pgTable(
+  "body_composition",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id"),
+    date: date("date").notNull(),
+    weightKg: real("weight_kg"),
+    bodyFatPct: real("body_fat_pct"),
+    muscleMassKg: real("muscle_mass_kg"),
+    bmi: real("bmi"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.date)],
+);
 
 // One row per calendar day of Garmin wellness data (steps, floors climbed).
 // Goals are stored per-day because Garmin's auto step goal changes over time.
-export const dailySummaries = pgTable("daily_summaries", {
-  id: serial("id").primaryKey(),
-  userId: text("user_id"),
-  date: date("date").notNull().unique(),
-  steps: integer("steps"),
-  stepGoal: integer("step_goal"),
-  floorsAscended: integer("floors_ascended"),
-  floorsDescended: integer("floors_descended"),
-  floorsGoal: integer("floors_goal"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const dailySummaries = pgTable(
+  "daily_summaries",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id"),
+    date: date("date").notNull(),
+    steps: integer("steps"),
+    stepGoal: integer("step_goal"),
+    floorsAscended: integer("floors_ascended"),
+    floorsDescended: integer("floors_descended"),
+    floorsGoal: integer("floors_goal"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.date)],
+);
 
 export const meals = pgTable("meals", {
   id: serial("id").primaryKey(),
