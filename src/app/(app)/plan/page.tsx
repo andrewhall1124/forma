@@ -8,6 +8,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  LibraryBig,
   Link2,
   Loader2,
   Pencil,
@@ -52,6 +53,7 @@ type WorkoutTemplate = {
   description: string | null;
   durationSeconds: number | null;
   distanceMeters: number | null;
+  lastUsedAt: string | null;
 };
 
 const PLAN_TYPE_META: Record<string, { label: string; icon: LucideIcon }> = {
@@ -104,7 +106,12 @@ type FormState = {
   description: string;
   durationMin: string;
   distanceMi: string;
+  // Template the form was filled from, so saving can bump its lastUsedAt.
+  templateId: number | null;
 };
+
+// Catalog picker filters: "recent", "all", or an activity type.
+const RECENT_LIMIT = 8;
 
 export default function PlanPage() {
   // Coach mode (which athlete's plan this is) comes from the global cookie;
@@ -121,6 +128,8 @@ export default function PlanPage() {
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
+  // null = catalog picker closed; otherwise the active filter.
+  const [catalogFilter, setCatalogFilter] = useState<string | null>(null);
 
   const loadTemplates = useCallback(async () => {
     const res = await fetch("/api/workout-templates");
@@ -161,6 +170,7 @@ export default function PlanPage() {
       description: "",
       durationMin: "",
       distanceMi: "",
+      templateId: null,
     });
   }
 
@@ -173,6 +183,7 @@ export default function PlanPage() {
       description: w.description ?? "",
       durationMin: w.durationSeconds ? String(Math.round(w.durationSeconds / 60)) : "",
       distanceMi: w.distanceMeters ? (w.distanceMeters / MI).toFixed(2) : "",
+      templateId: null,
     });
   }
 
@@ -197,6 +208,12 @@ export default function PlanPage() {
           body: JSON.stringify(payload),
         },
       );
+      // Bump recency only when the workout is actually saved, not on pick,
+      // so abandoned forms don't pollute "Recent".
+      if (form.id === null && form.templateId !== null) {
+        await fetch(`/api/workout-templates/${form.templateId}`, { method: "PATCH" });
+        loadTemplates();
+      }
       setForm(null);
       await loadWorkouts();
     } finally {
@@ -302,8 +319,24 @@ export default function PlanPage() {
       description: t.description ?? "",
       durationMin: t.durationSeconds ? String(Math.round(t.durationSeconds / 60)) : "",
       distanceMi: t.distanceMeters ? (t.distanceMeters / MI).toFixed(2) : "",
+      templateId: t.id,
     });
+    setCatalogFilter(null);
   }
+
+  // Only offer type filters for types that exist in the catalog, in the
+  // same order they appear in the form's type dropdown.
+  const catalogTypes = TYPE_OPTIONS.filter((t) =>
+    templates.some((tpl) => (tpl.activityType ?? "other") === t),
+  );
+
+  // Templates arrive from the API most-recently-used first.
+  const filteredTemplates =
+    catalogFilter === "recent"
+      ? templates.slice(0, RECENT_LIMIT)
+      : catalogFilter === "all"
+      ? [...templates].sort((a, b) => a.title.localeCompare(b.title))
+      : templates.filter((t) => (t.activityType ?? "other") === catalogFilter);
 
   return (
     <div className="flex-1 p-4 space-y-4 max-w-2xl">
@@ -604,42 +637,13 @@ export default function PlanPage() {
               </button>
             </div>
             {form.id === null && templates.length > 0 && (
-              <div>
-                <label className="text-xs text-neutral-400">From catalog</label>
-                <div className="mt-1 max-h-36 overflow-y-auto space-y-1.5 pr-1">
-                  {templates.map((t) => {
-                    const { label } = PLAN_TYPE_META[t.activityType ?? "other"] ?? PLAN_TYPE_META.other;
-                    const bits = [
-                      label,
-                      t.durationSeconds ? formatDuration(t.durationSeconds) : null,
-                      t.distanceMeters ? `${(t.distanceMeters / MI).toFixed(1)} mi` : null,
-                    ].filter(Boolean);
-                    return (
-                      <div
-                        key={t.id}
-                        className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => applyTemplate(t)}
-                          className="flex-1 min-w-0 px-3 py-2 text-left hover:bg-neutral-700/60 rounded-l-lg transition-colors"
-                        >
-                          <p className="text-sm font-medium truncate">{t.title}</p>
-                          <p className="text-xs text-neutral-500">{bits.join(" · ")}</p>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeTemplate(t)}
-                          className="p-2 shrink-0 text-neutral-600 hover:text-red-400 transition-colors"
-                          aria-label={`Remove ${t.title} from catalog`}
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setCatalogFilter("recent")}
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-700 py-2 text-sm font-medium text-neutral-300 hover:border-accent-500/60 hover:text-accent-400 transition-colors"
+              >
+                <LibraryBig size={14} /> Add from catalog
+              </button>
             )}
             <div>
               <label className="text-xs text-neutral-400">Title</label>
@@ -710,6 +714,92 @@ export default function PlanPage() {
               {form.id === null ? "Add workout" : "Save changes"}
             </button>
           </form>
+        </div>
+      )}
+
+      {form && catalogFilter !== null && (
+        <div className="fixed inset-0 z-30 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4">
+          <div className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="flex items-center gap-2 font-medium text-sm">
+                <LibraryBig size={16} className="text-accent-400" /> Add from catalog
+              </p>
+              <button
+                type="button"
+                onClick={() => setCatalogFilter(null)}
+                className="p-1 text-neutral-500 hover:text-neutral-200"
+                aria-label="Close catalog"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: "recent", label: "Recent" },
+                { key: "all", label: "All" },
+                ...catalogTypes.map((t) => ({ key: t, label: PLAN_TYPE_META[t].label })),
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCatalogFilter(key)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    catalogFilter === key
+                      ? "border-accent-500 bg-accent-500/10 text-accent-400"
+                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="max-h-80 overflow-y-auto space-y-1.5 pr-1">
+              {filteredTemplates.length === 0 ? (
+                <p className="text-xs text-neutral-600 py-4 text-center">
+                  Nothing in the catalog matches this filter.
+                </p>
+              ) : (
+                filteredTemplates.map((t) => {
+                  const { label, icon: TIcon } =
+                    PLAN_TYPE_META[t.activityType ?? "other"] ?? PLAN_TYPE_META.other;
+                  const bits = [
+                    label,
+                    t.durationSeconds ? formatDuration(t.durationSeconds) : null,
+                    t.distanceMeters ? `${(t.distanceMeters / MI).toFixed(1)} mi` : null,
+                  ].filter(Boolean);
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => applyTemplate(t)}
+                        className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2 text-left hover:bg-neutral-700/60 rounded-l-lg transition-colors"
+                      >
+                        <TIcon size={16} className="shrink-0 text-accent-400" />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium truncate">{t.title}</span>
+                          <span className="block text-xs text-neutral-500">
+                            {bits.join(" · ")}
+                          </span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeTemplate(t)}
+                        className="p-2 shrink-0 text-neutral-600 hover:text-red-400 transition-colors"
+                        aria-label={`Remove ${t.title} from catalog`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

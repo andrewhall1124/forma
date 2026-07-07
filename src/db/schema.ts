@@ -203,6 +203,8 @@ export const workoutTemplates = pgTable(
     description: text("description"),
     durationSeconds: integer("duration_seconds"),
     distanceMeters: real("distance_meters"),
+    // Bumped when the template is applied to a plan; drives "Recent" ordering.
+    lastUsedAt: timestamp("last_used_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (t) => [unique().on(t.ownerUserId, t.title)],

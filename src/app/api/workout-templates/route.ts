@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { workoutTemplates } from "@/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 
 // Templates are personal (keyed to the caller, not the athlete being
 // coached), so these use auth() directly rather than resolveViewer().
@@ -14,7 +14,7 @@ export async function GET() {
     .select()
     .from(workoutTemplates)
     .where(eq(workoutTemplates.ownerUserId, userId))
-    .orderBy(asc(workoutTemplates.title));
+    .orderBy(desc(workoutTemplates.lastUsedAt), asc(workoutTemplates.title));
   return Response.json(rows);
 }
 
