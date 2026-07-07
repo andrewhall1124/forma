@@ -104,8 +104,6 @@ export default function PlanPage() {
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
-  // Workout id whose "save to catalog" just succeeded, for brief feedback.
-  const [savedToCatalog, setSavedToCatalog] = useState<number | null>(null);
 
   const loadTemplates = useCallback(async () => {
     const res = await fetch("/api/workout-templates");
@@ -202,23 +200,30 @@ export default function PlanPage() {
     await loadWorkouts();
   }
 
-  async function saveToCatalog(w: PlannedWorkout) {
-    const res = await fetch("/api/workout-templates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        activityType: w.activityType,
-        title: w.title,
-        description: w.description,
-        durationSeconds: w.durationSeconds,
-        distanceMeters: w.distanceMeters,
-      }),
-    });
-    if (res.ok) {
-      setSavedToCatalog(w.id);
-      setTimeout(() => setSavedToCatalog((cur) => (cur === w.id ? null : cur)), 1500);
-      await loadTemplates();
+  // Catalog membership is keyed by title, so the bookmark stays lit across
+  // days and reloads for every workout that matches a saved template.
+  function catalogEntry(w: PlannedWorkout) {
+    return templates.find((t) => t.title === w.title);
+  }
+
+  async function toggleCatalog(w: PlannedWorkout) {
+    const existing = catalogEntry(w);
+    if (existing) {
+      await fetch(`/api/workout-templates/${existing.id}`, { method: "DELETE" });
+    } else {
+      await fetch("/api/workout-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activityType: w.activityType,
+          title: w.title,
+          description: w.description,
+          durationSeconds: w.durationSeconds,
+          distanceMeters: w.distanceMeters,
+        }),
+      });
     }
+    await loadTemplates();
   }
 
   async function removeTemplate(t: WorkoutTemplate) {
@@ -346,17 +351,23 @@ export default function PlanPage() {
                               </span>
                             )}
                             <button
-                              onClick={() => saveToCatalog(w)}
+                              onClick={() => toggleCatalog(w)}
                               className={cn(
                                 "p-1.5 transition-colors",
-                                savedToCatalog === w.id
-                                  ? "text-accent-400"
+                                catalogEntry(w)
+                                  ? "text-accent-400 hover:text-accent-300"
                                   : "text-neutral-500 hover:text-accent-400",
                               )}
-                              aria-label="Save to catalog"
-                              title="Save to catalog"
+                              aria-label={
+                                catalogEntry(w) ? "Remove from catalog" : "Save to catalog"
+                              }
+                              title={
+                                catalogEntry(w)
+                                  ? "In catalog — tap to remove"
+                                  : "Save to catalog"
+                              }
                             >
-                              {savedToCatalog === w.id ? (
+                              {catalogEntry(w) ? (
                                 <BookmarkCheck size={14} />
                               ) : (
                                 <BookmarkPlus size={14} />
