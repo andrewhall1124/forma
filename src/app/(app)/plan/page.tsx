@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   BookmarkCheck,
   BookmarkPlus,
   Check,
   ChevronLeft,
   ChevronRight,
+  Link2,
   Loader2,
   Pencil,
   Plus,
@@ -17,7 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { localDateStr } from "@/lib/date";
-import { TYPE_META, MI, formatDuration } from "@/lib/activity";
+import { TYPE_META, MI, formatDuration, formatDurationPrecise } from "@/lib/activity";
 import { useCoachMode } from "@/lib/athlete-mode";
 
 type PlannedWorkout = {
@@ -31,6 +33,16 @@ type PlannedWorkout = {
   durationSeconds: number | null;
   distanceMeters: number | null;
   status: "planned" | "completed" | "skipped";
+  linkedActivityId: number | null;
+};
+
+type ActivitySummary = {
+  id: number;
+  date: string;
+  activityType: string | null;
+  name: string | null;
+  distanceMeters: number | null;
+  durationSeconds: number | null;
 };
 
 type WorkoutTemplate = {
@@ -100,6 +112,11 @@ export default function PlanPage() {
   const coachMode = useCoachMode();
   const [monday, setMonday] = useState(() => mondayOf(localDateStr()));
   const [workouts, setWorkouts] = useState<PlannedWorkout[]>([]);
+  const [weekActivities, setWeekActivities] = useState<ActivitySummary[]>([]);
+  // Suggestion strips dismissed this session, and the workout whose manual
+  // link picker is open.
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+  const [linkPickerFor, setLinkPickerFor] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
@@ -119,7 +136,9 @@ export default function PlanPage() {
     try {
       const params = new URLSearchParams({ start: monday, end: addDays(monday, 6) });
       const res = await fetch(`/api/planned-workouts?${params}`);
-      setWorkouts(res.ok ? await res.json() : []);
+      const data = res.ok ? await res.json() : { workouts: [], activities: [] };
+      setWorkouts(data.workouts ?? []);
+      setWeekActivities(data.activities ?? []);
     } finally {
       setLoading(false);
     }
@@ -232,6 +251,48 @@ export default function PlanPage() {
     await loadTemplates();
   }
 
+  // Activities already claimed by a workout this week can't be suggested twice.
+  const claimedActivityIds = new Set(
+    workouts.map((w) => w.linkedActivityId).filter(Boolean),
+  );
+
+  function linkCandidates(w: PlannedWorkout, sameTypeOnly: boolean) {
+    return weekActivities.filter(
+      (a) =>
+        a.date === w.date &&
+        !claimedActivityIds.has(a.id) &&
+        (!sameTypeOnly || a.activityType === w.activityType),
+    );
+  }
+
+  async function linkActivity(w: PlannedWorkout, a: ActivitySummary) {
+    await fetch(`/api/planned-workouts/${w.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ linkedActivityId: a.id, status: "completed" }),
+    });
+    setLinkPickerFor(null);
+    await loadWorkouts();
+  }
+
+  async function unlinkActivity(w: PlannedWorkout) {
+    await fetch(`/api/planned-workouts/${w.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ linkedActivityId: null }),
+    });
+    await loadWorkouts();
+  }
+
+  function activityLine(a: ActivitySummary) {
+    return [
+      a.durationSeconds ? formatDurationPrecise(a.durationSeconds) : null,
+      a.distanceMeters ? `${(a.distanceMeters / MI).toFixed(2)} mi` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
+
   function applyTemplate(t: WorkoutTemplate) {
     if (!form) return;
     setForm({
@@ -315,6 +376,18 @@ export default function PlanPage() {
                       w.durationSeconds ? formatDuration(w.durationSeconds) : null,
                       w.distanceMeters ? `${(w.distanceMeters / MI).toFixed(1)} mi` : null,
                     ].filter(Boolean);
+                    const linkedActivity = w.linkedActivityId
+                      ? weekActivities.find((a) => a.id === w.linkedActivityId) ?? null
+                      : null;
+                    const pickerOpen = linkPickerFor === w.id;
+                    const linkable = !w.linkedActivityId && w.activityType !== "rest";
+                    const suggestions = !linkable
+                      ? []
+                      : pickerOpen
+                      ? linkCandidates(w, false)
+                      : w.status === "planned" && !dismissed.has(w.id)
+                      ? linkCandidates(w, true)
+                      : [];
                     return (
                       <div
                         key={w.id}
@@ -349,6 +422,21 @@ export default function PlanPage() {
                               <span className="flex items-center gap-1 text-xs text-green-400 mr-1">
                                 <Check size={12} /> Done
                               </span>
+                            )}
+                            {linkable && linkCandidates(w, false).length > 0 && (
+                              <button
+                                onClick={() => setLinkPickerFor(pickerOpen ? null : w.id)}
+                                className={cn(
+                                  "p-1.5 transition-colors",
+                                  pickerOpen
+                                    ? "text-accent-400"
+                                    : "text-neutral-500 hover:text-accent-400",
+                                )}
+                                aria-label="Link a completed activity"
+                                title="Link a completed activity"
+                              >
+                                <Link2 size={14} />
+                              </button>
                             )}
                             <button
                               onClick={() => toggleCatalog(w)}
@@ -393,6 +481,68 @@ export default function PlanPage() {
                           <p className="text-xs text-neutral-400 whitespace-pre-wrap">
                             {w.description}
                           </p>
+                        )}
+                        {w.linkedActivityId && (
+                          <div className="flex items-center justify-between gap-2 rounded-lg bg-neutral-800/60 px-3 py-2">
+                            <Link
+                              href={`/activities/${w.linkedActivityId}`}
+                              className="flex items-center gap-2 min-w-0 text-xs text-neutral-300 hover:text-accent-400 transition-colors"
+                            >
+                              <Link2 size={12} className="shrink-0 text-green-400" />
+                              <span className="truncate">
+                                {linkedActivity
+                                  ? `Actual: ${activityLine(linkedActivity) || linkedActivity.name || "activity"}`
+                                  : "View linked activity"}
+                              </span>
+                            </Link>
+                            <button
+                              onClick={() => unlinkActivity(w)}
+                              className="p-1 shrink-0 text-neutral-600 hover:text-red-400 transition-colors"
+                              aria-label="Unlink activity"
+                              title="Unlink activity"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        )}
+                        {suggestions.length > 0 && (
+                          <div className="rounded-lg border border-accent-500/30 bg-accent-500/5 p-2.5 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-medium text-accent-400">
+                                {pickerOpen
+                                  ? "Link a completed activity"
+                                  : "Looks like you did this"}
+                              </p>
+                              <button
+                                onClick={() =>
+                                  pickerOpen
+                                    ? setLinkPickerFor(null)
+                                    : setDismissed(new Set([...dismissed, w.id]))
+                                }
+                                className="p-0.5 text-neutral-500 hover:text-neutral-300 transition-colors"
+                                aria-label="Dismiss"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                            {suggestions.map((a) => (
+                              <button
+                                key={a.id}
+                                onClick={() => linkActivity(w, a)}
+                                className="w-full flex items-center justify-between gap-2 rounded-md bg-neutral-800 px-3 py-2 text-left hover:bg-neutral-700 transition-colors"
+                              >
+                                <span className="text-xs font-medium truncate">
+                                  {a.name ?? "Activity"}
+                                </span>
+                                <span className="text-xs text-neutral-400 shrink-0">
+                                  {activityLine(a)}
+                                </span>
+                              </button>
+                            ))}
+                            <p className="text-[11px] text-neutral-500">
+                              Tap to link — marks the workout complete.
+                            </p>
+                          </div>
                         )}
                         {viewingSelf && w.activityType !== "rest" && (
                           <div className="flex gap-2 pt-1">
