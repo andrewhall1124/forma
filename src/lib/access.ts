@@ -1,23 +1,31 @@
 import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
 import { db } from "@/db";
 import { coachLinks } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { ATHLETE_COOKIE } from "@/lib/athlete-cookie";
 
-// Resolves which user's data a request is for. Coaches pass ?athlete=<id> to
-// act on a linked athlete; otherwise the caller acts on their own data.
-// Returns subjectUserId null when the caller is unauthenticated or not an
-// active coach of the requested athlete.
-export async function resolveSubjectUserId(athleteParam: string | null): Promise<{
+// Resolves whose data this request is for. When the caller is in coach mode
+// (athlete cookie set to a linked athlete), reads target that athlete's data;
+// a stale or unlinked cookie silently falls back to the caller's own data.
+// Mutating endpoints should reject when coachView is true unless they
+// explicitly support coach edits (planned workouts do).
+export async function resolveViewer(): Promise<{
   userId: string | null;
   subjectUserId: string | null;
+  coachView: boolean;
 }> {
   const { userId } = await auth();
-  if (!userId) return { userId: null, subjectUserId: null };
-  if (!athleteParam || athleteParam === userId) {
-    return { userId, subjectUserId: userId };
+  if (!userId) return { userId: null, subjectUserId: null, coachView: false };
+
+  const athlete = (await cookies()).get(ATHLETE_COOKIE)?.value;
+  if (!athlete || athlete === userId) {
+    return { userId, subjectUserId: userId, coachView: false };
   }
-  const coaches = await coachesAthlete(userId, athleteParam);
-  return { userId, subjectUserId: coaches ? athleteParam : null };
+  const linked = await coachesAthlete(userId, athlete);
+  return linked
+    ? { userId, subjectUserId: athlete, coachView: true }
+    : { userId, subjectUserId: userId, coachView: false };
 }
 
 export async function coachesAthlete(coachUserId: string, athleteUserId: string) {

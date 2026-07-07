@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Copy, Loader2, UserMinus, X } from "lucide-react";
+import { Copy, Eye, Loader2, UserMinus, X } from "lucide-react";
+import { enterCoachMode } from "@/lib/athlete-mode";
 
 type Link = {
   id: number;
@@ -125,12 +126,20 @@ export default function CoachingSettings() {
               {asCoach.map((l) => (
                 <div key={l.id} className="flex items-center justify-between text-sm">
                   <span>{l.athleteName ?? "Athlete"}</span>
-                  <button
-                    onClick={() => revoke(l.id)}
-                    className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
-                  >
-                    <UserMinus size={12} /> Remove
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => enterCoachMode(l.athleteUserId, l.athleteName ?? "Athlete")}
+                      className="flex items-center gap-1 text-xs text-accent-400 hover:text-accent-300 transition-colors"
+                    >
+                      <Eye size={12} /> Coach view
+                    </button>
+                    <button
+                      onClick={() => revoke(l.id)}
+                      className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      <UserMinus size={12} /> Remove
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

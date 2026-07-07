@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
-import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
+import { resolveViewer } from "@/lib/access";
 import { db } from "@/db";
 import { meals, waterLogs, sleepLogs, activities, dailySummaries } from "@/db/schema";
 import { desc, eq, sql, and } from "drizzle-orm";
@@ -25,7 +25,7 @@ function formatSleep(secs: number) {
 }
 
 export default async function Dashboard() {
-  const { userId } = await auth();
+  const { subjectUserId: userId } = await resolveViewer();
   const tz = (await cookies()).get("tz")?.value || DEFAULT_TIME_ZONE;
   const today = localDateStr(tz);
 

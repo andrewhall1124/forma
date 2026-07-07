@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Droplets, Plus } from "lucide-react";
 import { localDateStr, lastNDateStrs } from "@/lib/date";
+import { useCoachMode } from "@/lib/athlete-mode";
 import { DailyHistoryChart } from "@/components/daily-history-chart";
 
 type WaterLog = {
@@ -30,6 +31,7 @@ function formatTime(iso: string) {
 }
 
 export default function WaterPage() {
+  const coachMode = useCoachMode();
   const [logs, setLogs] = useState<WaterLog[]>([]);
   const [history, setHistory] = useState<WaterDay[]>([]);
   const [adding, setAdding] = useState(false);
@@ -113,6 +115,7 @@ export default function WaterPage() {
         </p>
       </div>
 
+      {!coachMode && (
       <div className="grid grid-cols-4 gap-2">
         {QUICK_ADD.map((ml) => (
           <button
@@ -126,6 +129,7 @@ export default function WaterPage() {
           </button>
         ))}
       </div>
+      )}
 
       {daysLogged > 0 && (
         <div className="space-y-2">

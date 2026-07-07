@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp, Type, BookOpen } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { localDateStr, lastNDateStrs } from "@/lib/date";
+import { useCoachMode } from "@/lib/athlete-mode";
 import { DailyHistoryChart } from "@/components/daily-history-chart";
 
 type Ingredient = {
@@ -83,6 +84,7 @@ function todayStr() {
 }
 
 export default function MealsPage() {
+  const coachMode = useCoachMode();
   const [mealList, setMealList] = useState<Meal[]>([]);
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
   const [history, setHistory] = useState<NutritionDay[]>([]);
@@ -371,22 +373,24 @@ export default function MealsPage() {
             <span>F <span className="text-neutral-300 font-medium">{Math.round(totalFat)}g</span></span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/meals/catalog"
-            className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 active:bg-neutral-700"
-          >
-            <BookOpen size={16} />
-            Catalog
-          </Link>
-          <button
-            onClick={() => setIsOpen(true)}
-            className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full bg-accent-500 text-neutral-950 px-4 py-2.5 text-sm font-medium hover:bg-accent-400 active:bg-accent-600"
-          >
-            <Plus size={16} />
-            Add Meal
-          </button>
-        </div>
+        {!coachMode && (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/meals/catalog"
+              className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 active:bg-neutral-700"
+            >
+              <BookOpen size={16} />
+              Catalog
+            </Link>
+            <button
+              onClick={() => setIsOpen(true)}
+              className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full bg-accent-500 text-neutral-950 px-4 py-2.5 text-sm font-medium hover:bg-accent-400 active:bg-accent-600"
+            >
+              <Plus size={16} />
+              Add Meal
+            </button>
+          </div>
+        )}
       </div>
 
       {mealList.length === 0 ? (
@@ -417,18 +421,22 @@ export default function MealsPage() {
                       <p className="text-sm font-semibold text-neutral-200 mr-1">
                         {meal.calories != null ? `${Math.round(meal.calories * s)} kcal` : "—"}
                       </p>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleEdit(meal); }}
-                        className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(meal); }}
-                        className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {!coachMode && (
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleEdit(meal); }}
+                            className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(meal); }}
+                            className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-2">

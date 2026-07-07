@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { meals } from "@/db/schema";
 import { desc, eq, and } from "drizzle-orm";
+import { resolveViewer } from "@/lib/access";
 
 export async function GET(req: NextRequest) {
-  const { userId } = await auth();
+  const { subjectUserId: userId } = await resolveViewer();
   if (!userId) return Response.json([], { status: 401 });
 
   const date = req.nextUrl.searchParams.get("date");
@@ -37,8 +37,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { userId } = await auth();
+  const { userId, coachView } = await resolveViewer();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (coachView) return Response.json({ error: "Read-only in coach view" }, { status: 403 });
 
   const body = await req.json();
   const [row] = await db.insert(meals).values({ ...body, userId }).returning();

@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { meals } from "@/db/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
+import { resolveViewer } from "@/lib/access";
 
 // Daily nutrition totals (serving-scaled) from `start` (YYYY-MM-DD, the
 // user's local date) onward.
 export async function GET(req: NextRequest) {
-  const { userId } = await auth();
+  const { subjectUserId: userId } = await resolveViewer();
   if (!userId) return Response.json([], { status: 401 });
 
   const start = req.nextUrl.searchParams.get("start");

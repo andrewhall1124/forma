@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings } from "lucide-react";
+import { Settings, Users } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import { cn } from "@/lib/cn";
 import { NAV_LINKS } from "@/lib/nav-links";
@@ -34,6 +34,18 @@ export default function SideNav() {
         ))}
       </nav>
       <div className="px-3 pb-2">
+        <Link
+          href="/coach"
+          className={cn(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+            pathname === "/coach"
+              ? "bg-accent-500/10 text-accent-300"
+              : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60"
+          )}
+        >
+          <Users size={18} />
+          Coach
+        </Link>
         <Link
           href="/settings"
           className={cn(

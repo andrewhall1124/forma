@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/cn";
 import { localDateStr } from "@/lib/date";
 import { TYPE_META, MI, formatDuration } from "@/lib/activity";
+import { useCoachMode } from "@/lib/athlete-mode";
 
 type PlannedWorkout = {
   id: number;
@@ -30,15 +31,11 @@ type PlannedWorkout = {
   status: "planned" | "completed" | "skipped";
 };
 
-type CoachLink = {
-  id: number;
-  athleteUserId: string;
-  athleteName: string | null;
-};
-
 const PLAN_TYPE_META: Record<string, { label: string; icon: LucideIcon }> = {
   ...TYPE_META,
   rest: { label: "Rest", icon: BedDouble },
+  // TYPE_META labels this "Activity"; in a prescription picker "Other" is clearer.
+  other: { ...TYPE_META.other, label: "Other" },
 };
 
 const TYPE_OPTIONS = ["run", "walk", "ride", "strength", "swim", "rest", "other"] as const;
@@ -87,33 +84,25 @@ type FormState = {
 };
 
 export default function PlanPage() {
-  const [athletes, setAthletes] = useState<CoachLink[]>([]);
-  // null = viewing my own plan
-  const [athleteId, setAthleteId] = useState<string | null>(null);
+  // Coach mode (which athlete's plan this is) comes from the global cookie;
+  // the API resolves it server-side, so requests need no athlete param.
+  const coachMode = useCoachMode();
   const [monday, setMonday] = useState(() => mondayOf(localDateStr()));
   const [workouts, setWorkouts] = useState<PlannedWorkout[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/coach/links")
-      .then((res) => res.json())
-      .then((data) => setAthletes(data.asCoach ?? []))
-      .catch(() => {});
-  }, []);
-
   const loadWorkouts = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ start: monday, end: addDays(monday, 6) });
-      if (athleteId) params.set("athlete", athleteId);
       const res = await fetch(`/api/planned-workouts?${params}`);
       setWorkouts(res.ok ? await res.json() : []);
     } finally {
       setLoading(false);
     }
-  }, [monday, athleteId]);
+  }, [monday]);
 
   useEffect(() => {
     loadWorkouts();
@@ -121,7 +110,7 @@ export default function PlanPage() {
 
   const today = localDateStr();
   const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const viewingSelf = athleteId === null;
+  const viewingSelf = coachMode === null;
 
   function openCreate(date: string) {
     setForm({
@@ -159,7 +148,6 @@ export default function PlanPage() {
         description: form.description || null,
         durationSeconds: form.durationMin ? Math.round(Number(form.durationMin) * 60) : null,
         distanceMeters: form.distanceMi ? Number(form.distanceMi) * MI : null,
-        ...(form.id === null && athleteId ? { athleteUserId: athleteId } : {}),
       };
       await fetch(
         form.id === null ? "/api/planned-workouts" : `/api/planned-workouts/${form.id}`,
@@ -196,39 +184,11 @@ export default function PlanPage() {
       <div>
         <h1 className="text-xl font-bold">Training Plan</h1>
         <p className="text-sm text-neutral-400 mt-1">
-          {viewingSelf ? "Your prescribed workouts" : "Coaching view — prescribe workouts"}
+          {viewingSelf
+            ? "Your prescribed workouts"
+            : `Prescribing for ${coachMode.athleteName}`}
         </p>
       </div>
-
-      {athletes.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <button
-            onClick={() => setAthleteId(null)}
-            className={cn(
-              "rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap border transition-colors",
-              viewingSelf
-                ? "border-accent-500 bg-accent-500/10 text-accent-400"
-                : "border-neutral-700 text-neutral-400 hover:text-neutral-200",
-            )}
-          >
-            My plan
-          </button>
-          {athletes.map((a) => (
-            <button
-              key={a.athleteUserId}
-              onClick={() => setAthleteId(a.athleteUserId)}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap border transition-colors",
-                athleteId === a.athleteUserId
-                  ? "border-accent-500 bg-accent-500/10 text-accent-400"
-                  : "border-neutral-700 text-neutral-400 hover:text-neutral-200",
-              )}
-            >
-              {a.athleteName ?? "Athlete"}
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="flex items-center justify-between">
         <button

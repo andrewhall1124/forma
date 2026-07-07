@@ -2,6 +2,7 @@ import { UserButton } from "@clerk/nextjs";
 import { Settings } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import CoachModeBanner from "@/components/coach-mode-banner";
 import Nav from "@/components/nav";
 import SideNav from "@/components/side-nav";
 import SyncButton from "@/components/sync-button";
@@ -14,6 +15,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SideNav />
 
       <div className="flex-1 flex flex-col min-w-0">
+        <CoachModeBanner />
         {/* Mobile-only header */}
         <header className="md:hidden sticky top-0 z-10 flex items-center justify-between px-4 h-14 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur">
           <Logo />

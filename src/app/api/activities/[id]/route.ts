@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { db } from "@/db";
 import { activities, activityLaps, activityDetails } from "@/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { resolveViewer } from "@/lib/access";
 
 export async function GET(_req: NextRequest, ctx: RouteContext<"/api/activities/[id]">) {
-  const { userId } = await auth();
+  const { subjectUserId: userId } = await resolveViewer();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
