@@ -49,7 +49,10 @@ export default async function Dashboard() {
       .select()
       .from(dailySummaries)
       .where(and(eq(dailySummaries.userId, userId!), eq(dailySummaries.date, today)))
-      .limit(1),
+      .limit(1)
+      // The table is created by the first Garmin sync; render "no data"
+      // instead of crashing the dashboard until then.
+      .catch(() => []),
   ]);
 
   const calories = macroRow?.calories ?? 0;

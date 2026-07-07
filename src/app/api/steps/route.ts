@@ -14,6 +14,9 @@ export async function GET(req: NextRequest) {
     .from(dailySummaries)
     .where(eq(dailySummaries.userId, userId))
     .orderBy(desc(dailySummaries.date))
-    .limit(limit);
+    .limit(limit)
+    // The table is created by the first Garmin sync; return an empty
+    // history instead of a 500 until then.
+    .catch(() => []);
   return Response.json(rows);
 }
