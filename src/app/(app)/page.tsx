@@ -29,7 +29,7 @@ export default async function Dashboard() {
   const tz = (await cookies()).get("tz")?.value || DEFAULT_TIME_ZONE;
   const today = localDateStr(tz);
 
-  const [[macroRow], [waterRow], [lastSleep], [lastActivity], [todaySummary]] = await Promise.all([
+  const [[macroRow], [waterRow], [lastSleep], [lastActivity], [lastSummary]] = await Promise.all([
     db
       .select({
         calories: sql<number>`coalesce(sum(coalesce(${meals.calories}, 0) * coalesce(${meals.servings}, 1)), 0)`,
@@ -48,7 +48,10 @@ export default async function Dashboard() {
     db
       .select()
       .from(dailySummaries)
-      .where(and(eq(dailySummaries.userId, userId!), eq(dailySummaries.date, today)))
+      // Latest available day, not just today: a row for today only exists
+      // once a sync has run today, so falling back keeps the card useful.
+      .where(eq(dailySummaries.userId, userId!))
+      .orderBy(desc(dailySummaries.date))
       .limit(1)
       // The table is created by the first Garmin sync; render "no data"
       // instead of crashing the dashboard until then.
@@ -60,10 +63,14 @@ export default async function Dashboard() {
   const carbs = macroRow?.carbs ?? 0;
   const fat = macroRow?.fat ?? 0;
   const waterMl = waterRow?.total ?? 0;
-  const steps = todaySummary?.steps ?? 0;
-  const stepGoal = todaySummary?.stepGoal ?? 10000;
-  const floors = todaySummary?.floorsAscended ?? 0;
-  const floorsGoal = todaySummary?.floorsGoal ?? 10;
+  const steps = lastSummary?.steps ?? 0;
+  const stepGoal = lastSummary?.stepGoal ?? 10000;
+  const floors = lastSummary?.floorsAscended ?? 0;
+  const floorsGoal = lastSummary?.floorsGoal ?? 10;
+  // Flag stale (pre-today) summaries in the cards so old counts aren't
+  // mistaken for today's.
+  const summaryDateSuffix =
+    lastSummary && lastSummary.date !== today ? ` · ${lastSummary.date}` : "";
 
   return (
     <div className="p-4 space-y-4">
@@ -88,22 +95,22 @@ export default async function Dashboard() {
         />
         <StatCard
           label="Steps"
-          value={todaySummary ? steps.toLocaleString() : "—"}
+          value={lastSummary ? steps.toLocaleString() : "—"}
           unit=""
           sub={
-            todaySummary
-              ? `${Math.round(Math.min(100, (steps / stepGoal) * 100))}% of ${stepGoal.toLocaleString()} goal`
+            lastSummary
+              ? `${Math.round(Math.min(100, (steps / stepGoal) * 100))}% of ${stepGoal.toLocaleString()} goal${summaryDateSuffix}`
               : "no data"
           }
-          progress={todaySummary ? steps / stepGoal : undefined}
+          progress={lastSummary ? steps / stepGoal : undefined}
           progressColor="bg-green-500"
         />
         <StatCard
           label="Floors"
-          value={todaySummary ? floors : "—"}
-          unit={todaySummary ? "floors" : ""}
-          sub={todaySummary ? `${Math.round(Math.min(100, (floors / floorsGoal) * 100))}% of ${floorsGoal} goal` : "no data"}
-          progress={todaySummary ? floors / floorsGoal : undefined}
+          value={lastSummary ? floors : "—"}
+          unit={lastSummary ? "floors" : ""}
+          sub={lastSummary ? `${Math.round(Math.min(100, (floors / floorsGoal) * 100))}% of ${floorsGoal} goal${summaryDateSuffix}` : "no data"}
+          progress={lastSummary ? floors / floorsGoal : undefined}
           progressColor="bg-[#b08a5a]"
         />
         <StatCard
