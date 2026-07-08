@@ -132,7 +132,7 @@ function weeksLabel(days: number): string {
   if (days === 0) return "Today";
   const weeks = Math.round(days / 7);
   if (weeks === 0) return "This week";
-  return `${weeks} wk${weeks === 1 ? "" : "s"}`;
+  return `${weeks} week${weeks === 1 ? "" : "s"}`;
 }
 
 type FormState = {
