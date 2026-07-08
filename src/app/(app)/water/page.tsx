@@ -60,6 +60,7 @@ export default function WaterPage() {
   const mlByDate = new Map(history.map((d) => [d.date, d.totalMl]));
   const chartData = lastNDateStrs(HISTORY_DAYS).map((d) => ({
     date: d.slice(5),
+    fullDate: d,
     value: (mlByDate.get(d) ?? 0) / 1000,
   }));
   const daysLogged = history.length;
@@ -101,6 +102,7 @@ export default function WaterPage() {
             label="Water"
             goal={DAILY_GOAL_ML / 1000}
             goalLabel={`${(DAILY_GOAL_ML / 1000).toFixed(1)}L goal`}
+            onSelectDate={setDate}
           />
         </div>
       )}

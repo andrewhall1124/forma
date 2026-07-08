@@ -146,6 +146,7 @@ export default function MealsPage() {
   const historyByDate = new Map(history.map((d) => [d.date, d]));
   const historyChartData = lastNDateStrs(HISTORY_DAYS).map((d) => ({
     date: d.slice(5),
+    fullDate: d,
     value: Math.round(historyByDate.get(d)?.[historyMetric] ?? 0),
   }));
 
@@ -394,6 +395,7 @@ export default function MealsPage() {
             label={historyMetricDef.label}
             goal={historyMetricDef.target}
             goalLabel={`${historyMetricDef.target}${historyMetricDef.unit} target`}
+            onSelectDate={setDate}
           />
         </div>
       )}

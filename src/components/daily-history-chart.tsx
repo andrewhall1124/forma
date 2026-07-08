@@ -14,6 +14,8 @@ export type DailyPoint = {
   // MM-DD label for the x-axis
   date: string;
   value: number;
+  // Full YYYY-MM-DD, used when bars are clickable to navigate to that day.
+  fullDate?: string;
 };
 
 export function DailyHistoryChart({
@@ -23,6 +25,7 @@ export function DailyHistoryChart({
   label,
   goal,
   goalLabel,
+  onSelectDate,
 }: {
   data: DailyPoint[];
   color: string;
@@ -30,6 +33,7 @@ export function DailyHistoryChart({
   label: string;
   goal?: number;
   goalLabel?: string;
+  onSelectDate?: (fullDate: string) => void;
 }) {
   return (
     <div className="h-48 -mx-1">
@@ -70,7 +74,16 @@ export function DailyHistoryChart({
               label={{ value: goalLabel, position: "insideTopRight", fontSize: 10, fill: "#6b7280" }}
             />
           )}
-          <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
+          <Bar
+            dataKey="value"
+            fill={color}
+            radius={[4, 4, 0, 0]}
+            cursor={onSelectDate ? "pointer" : undefined}
+            onClick={(_, index) => {
+              const point = data[index];
+              if (onSelectDate && point?.fullDate) onSelectDate(point.fullDate);
+            }}
+          />
         </BarChart>
       </ResponsiveContainer>
     </div>
