@@ -84,6 +84,27 @@ export default function WaterPage() {
 
   return (
     <div className="flex-1 flex flex-col p-4 gap-6">
+      {daysLogged > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+              Last {HISTORY_DAYS} Days
+            </p>
+            <p className="text-xs text-neutral-500">
+              avg {(avgMl / 1000).toFixed(1)} L on days logged
+            </p>
+          </div>
+          <DailyHistoryChart
+            data={chartData}
+            color="#5d83a4"
+            unit=" L"
+            label="Water"
+            goal={DAILY_GOAL_ML / 1000}
+            goalLabel={`${(DAILY_GOAL_ML / 1000).toFixed(1)}L goal`}
+          />
+        </div>
+      )}
+
       <DateNav value={date} today={today} onChange={setDate} />
 
       {/* Ring — fills available vertical space and centers */}
@@ -133,27 +154,6 @@ export default function WaterPage() {
           </button>
         ))}
       </div>
-      )}
-
-      {daysLogged > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-              Last {HISTORY_DAYS} Days
-            </p>
-            <p className="text-xs text-neutral-500">
-              avg {(avgMl / 1000).toFixed(1)} L on days logged
-            </p>
-          </div>
-          <DailyHistoryChart
-            data={chartData}
-            color="#5d83a4"
-            unit=" L"
-            label="Water"
-            goal={DAILY_GOAL_ML / 1000}
-            goalLabel={`${(DAILY_GOAL_ML / 1000).toFixed(1)}L goal`}
-          />
-        </div>
       )}
 
       {logs.length > 0 && (

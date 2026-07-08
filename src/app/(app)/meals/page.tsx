@@ -364,6 +364,40 @@ export default function MealsPage() {
 
   return (
     <div className="p-4 space-y-4">
+      {history.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+              Last {HISTORY_DAYS} Days
+            </p>
+            <div className="flex gap-1">
+              {HISTORY_METRICS.map((m) => (
+                <button
+                  key={m.key}
+                  onClick={() => setHistoryMetric(m.key)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
+                    historyMetric === m.key
+                      ? "border-accent-500 bg-accent-500/20 text-accent-300"
+                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DailyHistoryChart
+            data={historyChartData}
+            color={historyMetricDef.color}
+            unit={historyMetricDef.unit}
+            label={historyMetricDef.label}
+            goal={historyMetricDef.target}
+            goalLabel={`${historyMetricDef.target}${historyMetricDef.unit} target`}
+          />
+        </div>
+      )}
+
       <DateNav value={date} today={today} onChange={setDate} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -482,40 +516,6 @@ export default function MealsPage() {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {history.length > 0 && (
-        <div className="space-y-2 pt-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-              Last {HISTORY_DAYS} Days
-            </p>
-            <div className="flex gap-1">
-              {HISTORY_METRICS.map((m) => (
-                <button
-                  key={m.key}
-                  onClick={() => setHistoryMetric(m.key)}
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium border transition-colors",
-                    historyMetric === m.key
-                      ? "border-accent-500 bg-accent-500/20 text-accent-300"
-                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <DailyHistoryChart
-            data={historyChartData}
-            color={historyMetricDef.color}
-            unit={historyMetricDef.unit}
-            label={historyMetricDef.label}
-            goal={historyMetricDef.target}
-            goalLabel={`${historyMetricDef.target}${historyMetricDef.unit} target`}
-          />
         </div>
       )}
 

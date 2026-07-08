@@ -14,6 +14,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Settings2,
   StickyNote,
   Trash2,
   X,
@@ -118,22 +119,20 @@ function monthLabel(monthStart: string): string {
   });
 }
 
-// Whole weeks + leftover days between today and a future date. Returns null
-// when the date is in the past.
-function raceCountdown(dateStr: string, today: string): { weeks: number; days: number } | null {
+// Whole days from today to a future date, or null if it's in the past.
+function daysUntil(dateStr: string, today: string): number | null {
   const diff = Math.round(
     (Date.parse(`${dateStr}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
   );
-  if (diff < 0) return null;
-  return { weeks: Math.floor(diff / 7), days: diff % 7 };
+  return diff < 0 ? null : diff;
 }
 
-function countdownLabel(c: { weeks: number; days: number }): string {
-  if (c.weeks === 0 && c.days === 0) return "Today";
-  const parts = [];
-  if (c.weeks > 0) parts.push(`${c.weeks} wk${c.weeks === 1 ? "" : "s"}`);
-  if (c.days > 0) parts.push(`${c.days} day${c.days === 1 ? "" : "s"}`);
-  return parts.join(" ");
+// A weeks-only countdown label, rounded to the nearest week.
+function weeksLabel(days: number): string {
+  if (days === 0) return "Today";
+  const weeks = Math.round(days / 7);
+  if (weeks === 0) return "This week";
+  return `${weeks} wk${weeks === 1 ? "" : "s"}`;
 }
 
 type FormState = {
@@ -179,6 +178,7 @@ export default function PlanPage() {
   const [form, setForm] = useState<FormState | null>(null);
   const [noteForm, setNoteForm] = useState<NoteForm | null>(null);
   const [raceForm, setRaceForm] = useState<RaceForm | null>(null);
+  const [manageRaces, setManageRaces] = useState(false);
   const [saving, setSaving] = useState(false);
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
   // null = catalog picker closed; otherwise the active filter.
@@ -490,19 +490,16 @@ export default function PlanPage() {
             <Flag size={13} /> Races
           </p>
           <button
-            onClick={() =>
-              setRaceForm({ id: null, date: selectedDate, name: "", distanceMi: "", notes: "" })
-            }
+            onClick={() => setManageRaces(true)}
             className="flex items-center gap-1 text-xs text-neutral-500 hover:text-accent-400 transition-colors"
           >
-            <Plus size={12} /> Add race
+            <Settings2 size={12} /> Manage races
           </button>
         </div>
         {upcomingRaces.length === 0 ? (
           <p className="text-xs text-neutral-600 px-1">No upcoming races</p>
         ) : (
           upcomingRaces.map((r) => {
-            const c = raceCountdown(r.date, today)!;
             const bits = [
               dayLabel(r.date),
               r.distanceMeters ? `${(r.distanceMeters / MI).toFixed(1)} mi` : null,
@@ -519,35 +516,11 @@ export default function PlanPage() {
                     <p className="text-xs text-neutral-400 mt-1 whitespace-pre-wrap">{r.notes}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <div className="text-right mr-1">
-                    <p className="text-sm font-bold text-accent-400 tabular-nums">
-                      {countdownLabel(c)}
-                    </p>
-                    <p className="text-[11px] text-neutral-500">to go</p>
-                  </div>
-                  <button
-                    onClick={() =>
-                      setRaceForm({
-                        id: r.id,
-                        date: r.date,
-                        name: r.name,
-                        distanceMi: r.distanceMeters ? (r.distanceMeters / MI).toFixed(2) : "",
-                        notes: r.notes ?? "",
-                      })
-                    }
-                    className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
-                    aria-label="Edit race"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => removeRace(r)}
-                    className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
-                    aria-label="Delete race"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-accent-400 tabular-nums">
+                    {weeksLabel(daysUntil(r.date, today)!)}
+                  </p>
+                  <p className="text-[11px] text-neutral-500">to go</p>
                 </div>
               </div>
             );
@@ -1062,7 +1035,7 @@ export default function PlanPage() {
       )}
 
       {raceForm && (
-        <div className="fixed inset-0 z-20 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4">
+        <div className="fixed inset-0 z-40 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4">
           <form
             onSubmit={saveRace}
             className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-3"
@@ -1135,6 +1108,82 @@ export default function PlanPage() {
               {raceForm.id === null ? "Add race" : "Save changes"}
             </button>
           </form>
+        </div>
+      )}
+
+      {manageRaces && (
+        <div className="fixed inset-0 z-30 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4">
+          <div className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="flex items-center gap-2 font-medium text-sm">
+                <Flag size={16} className="text-red-400" /> Manage races
+              </p>
+              <button
+                type="button"
+                onClick={() => setManageRaces(false)}
+                className="p-1 text-neutral-500 hover:text-neutral-200"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setRaceForm({ id: null, date: selectedDate, name: "", distanceMi: "", notes: "" })
+              }
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-700 py-2 text-sm font-medium text-neutral-300 hover:border-accent-500/60 hover:text-accent-400 transition-colors"
+            >
+              <Plus size={14} /> Add race
+            </button>
+            <div className="max-h-80 overflow-y-auto space-y-1.5 pr-1">
+              {races.length === 0 ? (
+                <p className="text-xs text-neutral-600 py-4 text-center">No races yet.</p>
+              ) : (
+                races.map((r) => {
+                  const bits = [
+                    dayLabel(r.date),
+                    r.distanceMeters ? `${(r.distanceMeters / MI).toFixed(1)} mi` : null,
+                  ].filter(Boolean);
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800"
+                    >
+                      <div className="flex-1 min-w-0 px-3 py-2">
+                        <p className="text-sm font-medium truncate">{r.name}</p>
+                        <p className="text-xs text-neutral-500">{bits.join(" · ")}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRaceForm({
+                            id: r.id,
+                            date: r.date,
+                            name: r.name,
+                            distanceMi: r.distanceMeters ? (r.distanceMeters / MI).toFixed(2) : "",
+                            notes: r.notes ?? "",
+                          })
+                        }
+                        className="p-2 shrink-0 text-neutral-500 hover:text-neutral-200 transition-colors"
+                        aria-label={`Edit ${r.name}`}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeRace(r)}
+                        className="p-2 shrink-0 text-neutral-600 hover:text-red-400 transition-colors"
+                        aria-label={`Delete ${r.name}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
 
