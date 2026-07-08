@@ -70,8 +70,6 @@ type Race = {
   id: number;
   date: string;
   name: string;
-  distanceMeters: number | null;
-  notes: string | null;
 };
 
 const PLAN_TYPE_META: Record<string, { label: string; icon: LucideIcon }> = {
@@ -153,8 +151,6 @@ type RaceForm = {
   id: number | null;
   date: string;
   name: string;
-  distanceMi: string;
-  notes: string;
 };
 
 // Catalog picker filters: "recent", "all", or an activity type.
@@ -335,8 +331,6 @@ export default function PlanPage() {
       const payload = {
         date: raceForm.date,
         name: raceForm.name,
-        distanceMeters: raceForm.distanceMi ? Number(raceForm.distanceMi) * MI : null,
-        notes: raceForm.notes || null,
       };
       await fetch(raceForm.id === null ? "/api/races" : `/api/races/${raceForm.id}`, {
         method: raceForm.id === null ? "POST" : "PATCH",
@@ -501,10 +495,6 @@ export default function PlanPage() {
           <p className="text-xs text-neutral-600 px-1">No upcoming races</p>
         ) : (
           upcomingRaces.map((r) => {
-            const bits = [
-              dayLabel(r.date),
-              r.distanceMeters ? `${(r.distanceMeters / MI).toFixed(1)} mi` : null,
-            ].filter(Boolean);
             return (
               <div
                 key={r.id}
@@ -512,10 +502,7 @@ export default function PlanPage() {
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{r.name}</p>
-                  <p className="text-xs text-neutral-500 mt-0.5">{bits.join(" · ")}</p>
-                  {r.notes && (
-                    <p className="text-xs text-neutral-400 mt-1 whitespace-pre-wrap">{r.notes}</p>
-                  )}
+                  <p className="text-xs text-neutral-500 mt-0.5">{dayLabel(r.date)}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold text-accent-400 tabular-nums">
@@ -643,14 +630,7 @@ export default function PlanPage() {
                 <Flag size={18} className="text-red-400 mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{r.name}</p>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {[
-                      "Race day",
-                      r.distanceMeters ? `${(r.distanceMeters / MI).toFixed(1)} mi` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
+                  <p className="text-xs text-neutral-500 mt-0.5">Race day</p>
                 </div>
               </div>
             ))}
@@ -1079,38 +1059,14 @@ export default function PlanPage() {
                 placeholder="Chicago Marathon"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-neutral-400">Date</label>
-                <input
-                  type="date"
-                  value={raceForm.date}
-                  onChange={(e) => setRaceForm({ ...raceForm, date: e.target.value })}
-                  required
-                  className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none focus:border-neutral-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-400">Miles</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={raceForm.distanceMi}
-                  onChange={(e) => setRaceForm({ ...raceForm, distanceMi: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none focus:border-neutral-500 placeholder-neutral-600"
-                  placeholder="26.2"
-                />
-              </div>
-            </div>
             <div>
-              <label className="text-xs text-neutral-400">Notes</label>
-              <textarea
-                value={raceForm.notes}
-                onChange={(e) => setRaceForm({ ...raceForm, notes: e.target.value })}
-                rows={2}
-                className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none focus:border-neutral-500 placeholder-neutral-600 resize-none"
-                placeholder="Goal time, corral, logistics…"
+              <label className="text-xs text-neutral-400">Date</label>
+              <input
+                type="date"
+                value={raceForm.date}
+                onChange={(e) => setRaceForm({ ...raceForm, date: e.target.value })}
+                required
+                className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none focus:border-neutral-500"
               />
             </div>
             <button
@@ -1144,7 +1100,7 @@ export default function PlanPage() {
             <button
               type="button"
               onClick={() =>
-                setRaceForm({ id: null, date: selectedDate, name: "", distanceMi: "", notes: "" })
+                setRaceForm({ id: null, date: selectedDate, name: "" })
               }
               className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-700 py-2 text-sm font-medium text-neutral-300 hover:border-accent-500/60 hover:text-accent-400 transition-colors"
             >
@@ -1155,10 +1111,6 @@ export default function PlanPage() {
                 <p className="text-xs text-neutral-600 py-4 text-center">No races yet.</p>
               ) : (
                 races.map((r) => {
-                  const bits = [
-                    dayLabel(r.date),
-                    r.distanceMeters ? `${(r.distanceMeters / MI).toFixed(1)} mi` : null,
-                  ].filter(Boolean);
                   return (
                     <div
                       key={r.id}
@@ -1166,7 +1118,7 @@ export default function PlanPage() {
                     >
                       <div className="flex-1 min-w-0 px-3 py-2">
                         <p className="text-sm font-medium truncate">{r.name}</p>
-                        <p className="text-xs text-neutral-500">{bits.join(" · ")}</p>
+                        <p className="text-xs text-neutral-500">{dayLabel(r.date)}</p>
                       </div>
                       <button
                         type="button"
@@ -1175,8 +1127,6 @@ export default function PlanPage() {
                             id: r.id,
                             date: r.date,
                             name: r.name,
-                            distanceMi: r.distanceMeters ? (r.distanceMeters / MI).toFixed(2) : "",
-                            notes: r.notes ?? "",
                           })
                         }
                         className="p-2 shrink-0 text-neutral-500 hover:text-neutral-200 transition-colors"

@@ -213,8 +213,6 @@ export const races = pgTable("races", {
   coachUserId: text("coach_user_id"),
   date: date("date").notNull(),
   name: text("name").notNull(),
-  distanceMeters: real("distance_meters"),
-  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

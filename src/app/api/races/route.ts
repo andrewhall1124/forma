@@ -43,8 +43,6 @@ export async function POST(req: NextRequest) {
       coachUserId: coachView ? userId : null,
       date: body.date,
       name: body.name.trim(),
-      distanceMeters: body.distanceMeters ?? null,
-      notes: body.notes?.trim() || null,
     })
     .returning();
   return Response.json(row, { status: 201 });

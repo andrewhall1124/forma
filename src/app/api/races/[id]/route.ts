@@ -28,8 +28,6 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/races/[id]
     updates.name = body.name.trim();
   }
   if (typeof body.date === "string") updates.date = body.date;
-  if ("distanceMeters" in body) updates.distanceMeters = body.distanceMeters ?? null;
-  if ("notes" in body) updates.notes = body.notes?.trim() || null;
 
   const [updated] = await db.update(races).set(updates).where(eq(races.id, id)).returning();
   return Response.json(updated);
