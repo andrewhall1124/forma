@@ -37,6 +37,7 @@ type PlannedWorkout = {
   durationSeconds: number | null;
   distanceMeters: number | null;
   status: "planned" | "completed" | "skipped";
+  skipReason: string | null;
   linkedActivityId: number | null;
 };
 
@@ -47,6 +48,7 @@ type ActivitySummary = {
   name: string | null;
   distanceMeters: number | null;
   durationSeconds: number | null;
+  notes: string | null;
 };
 
 type WorkoutTemplate = {
@@ -177,6 +179,10 @@ export default function PlanPage() {
   const [raceForm, setRaceForm] = useState<RaceForm | null>(null);
   const [manageRaces, setManageRaces] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Inline editors on workout cards, keyed by workout / activity id.
+  const [skipEdit, setSkipEdit] = useState<{ id: number; draft: string } | null>(null);
+  const [actNotesEdit, setActNotesEdit] = useState<{ id: number; draft: string } | null>(null);
+  const [inlineSaving, setInlineSaving] = useState(false);
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
   // null = catalog picker closed; otherwise the active filter.
   const [catalogFilter, setCatalogFilter] = useState<string | null>(null);
@@ -351,12 +357,53 @@ export default function PlanPage() {
   }
 
   async function setStatus(w: PlannedWorkout, status: PlannedWorkout["status"]) {
+    // Leaving the skipped state drops any reason that went with it.
+    const body =
+      status === "skipped" ? { status } : { status, skipReason: null };
     await fetch(`/api/planned-workouts/${w.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(body),
     });
+    // Newly skipped with no reason yet — open the editor so they can add one.
+    if (status === "skipped" && !w.skipReason) {
+      setSkipEdit({ id: w.id, draft: "" });
+    } else if (status !== "skipped") {
+      setSkipEdit((s) => (s?.id === w.id ? null : s));
+    }
     await loadPlan();
+  }
+
+  async function saveSkipReason(w: PlannedWorkout) {
+    if (!skipEdit || skipEdit.id !== w.id) return;
+    setInlineSaving(true);
+    try {
+      await fetch(`/api/planned-workouts/${w.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skipReason: skipEdit.draft.trim() || null }),
+      });
+      setSkipEdit(null);
+      await loadPlan();
+    } finally {
+      setInlineSaving(false);
+    }
+  }
+
+  async function saveActivityNotes(activityId: number) {
+    if (!actNotesEdit || actNotesEdit.id !== activityId) return;
+    setInlineSaving(true);
+    try {
+      await fetch(`/api/activities/${activityId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: actNotesEdit.draft }),
+      });
+      setActNotesEdit(null);
+      await loadPlan();
+    } finally {
+      setInlineSaving(false);
+    }
   }
 
   async function remove(w: PlannedWorkout) {
@@ -702,7 +749,7 @@ export default function PlanPage() {
                     w.status === "completed"
                       ? "border-green-900/60"
                       : w.status === "skipped"
-                      ? "border-neutral-800 opacity-60"
+                      ? cn("border-neutral-800", skipEdit?.id !== w.id && "opacity-60")
                       : "border-neutral-800",
                   )}
                 >
@@ -784,6 +831,57 @@ export default function PlanPage() {
                       {w.description}
                     </p>
                   )}
+                  {w.status === "skipped" &&
+                    (skipEdit?.id === w.id ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          value={skipEdit.draft}
+                          onChange={(e) => setSkipEdit({ ...skipEdit, draft: e.target.value })}
+                          rows={2}
+                          autoFocus
+                          placeholder="Why did you skip this? (optional)"
+                          className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs outline-none focus:border-neutral-500 placeholder-neutral-600 resize-none"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setSkipEdit(null)}
+                            className="flex-1 rounded-lg border border-neutral-700 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => saveSkipReason(w)}
+                            disabled={inlineSaving}
+                            className="flex items-center justify-center gap-1 flex-1 rounded-lg bg-accent-500 text-neutral-950 py-1.5 text-xs font-medium hover:bg-accent-400 disabled:opacity-50"
+                          >
+                            {inlineSaving && <Loader2 size={12} className="animate-spin" />} Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : w.skipReason ? (
+                      <div className="flex items-start justify-between gap-2 rounded-lg bg-neutral-800/40 px-3 py-2">
+                        <p className="flex items-start gap-1.5 min-w-0 text-xs text-neutral-300">
+                          <StickyNote size={12} className="mt-0.5 shrink-0 text-neutral-500" />
+                          <span className="whitespace-pre-wrap">{w.skipReason}</span>
+                        </p>
+                        {viewingSelf && (
+                          <button
+                            onClick={() => setSkipEdit({ id: w.id, draft: w.skipReason ?? "" })}
+                            className="p-0.5 shrink-0 text-neutral-500 hover:text-accent-400 transition-colors"
+                            aria-label="Edit skip reason"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        )}
+                      </div>
+                    ) : viewingSelf ? (
+                      <button
+                        onClick={() => setSkipEdit({ id: w.id, draft: "" })}
+                        className="flex items-center gap-1 text-xs text-neutral-500 hover:text-accent-400 transition-colors"
+                      >
+                        <Plus size={12} /> Add a reason
+                      </button>
+                    ) : null)}
                   {w.linkedActivityId && (
                     <div className="flex items-center justify-between gap-2 rounded-lg bg-neutral-800/60 px-3 py-2">
                       <Link
@@ -805,6 +903,63 @@ export default function PlanPage() {
                       >
                         <X size={12} />
                       </button>
+                    </div>
+                  )}
+                  {w.linkedActivityId && linkedActivity && (
+                    <div className="rounded-lg bg-neutral-800/40 px-3 py-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="flex items-center gap-1 text-[11px] font-medium text-neutral-400">
+                          <StickyNote size={11} /> Activity notes
+                        </p>
+                        {viewingSelf && actNotesEdit?.id !== w.linkedActivityId && (
+                          <button
+                            onClick={() =>
+                              setActNotesEdit({
+                                id: w.linkedActivityId!,
+                                draft: linkedActivity.notes ?? "",
+                              })
+                            }
+                            className="flex items-center gap-1 text-[11px] text-neutral-500 hover:text-accent-400 transition-colors"
+                          >
+                            <Pencil size={11} /> {linkedActivity.notes ? "Edit" : "Add"}
+                          </button>
+                        )}
+                      </div>
+                      {actNotesEdit?.id === w.linkedActivityId ? (
+                        <div className="space-y-1.5">
+                          <textarea
+                            value={actNotesEdit.draft}
+                            onChange={(e) =>
+                              setActNotesEdit({ ...actNotesEdit, draft: e.target.value })
+                            }
+                            rows={3}
+                            autoFocus
+                            placeholder="How did it feel? Conditions, effort, injuries…"
+                            className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs outline-none focus:border-neutral-500 placeholder-neutral-600 resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setActNotesEdit(null)}
+                              className="flex-1 rounded-lg border border-neutral-700 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => saveActivityNotes(w.linkedActivityId!)}
+                              disabled={inlineSaving}
+                              className="flex items-center justify-center gap-1 flex-1 rounded-lg bg-accent-500 text-neutral-950 py-1.5 text-xs font-medium hover:bg-accent-400 disabled:opacity-50"
+                            >
+                              {inlineSaving && <Loader2 size={12} className="animate-spin" />} Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : linkedActivity.notes ? (
+                        <p className="whitespace-pre-wrap text-xs text-neutral-300">
+                          {linkedActivity.notes}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-neutral-600">No notes yet.</p>
+                      )}
                     </div>
                   )}
                   {suggestions.length > 0 && (

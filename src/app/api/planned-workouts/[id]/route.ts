@@ -35,6 +35,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/planned-wo
     "durationSeconds",
     "distanceMeters",
     "status",
+    "skipReason",
     "linkedActivityId",
   ] as const) {
     if (key in body) updates[key] = body[key];

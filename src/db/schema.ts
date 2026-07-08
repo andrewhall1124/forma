@@ -186,6 +186,8 @@ export const plannedWorkouts = pgTable("planned_workouts", {
   distanceMeters: real("distance_meters"),
   // planned | completed | skipped
   status: text("status").notNull().default("planned"),
+  // Free-text reason the athlete gives when marking a workout skipped.
+  skipReason: text("skip_reason"),
   // The Garmin-synced activity that fulfilled this workout, once linked.
   linkedActivityId: integer("linked_activity_id"),
   createdAt: timestamp("created_at").defaultNow(),

@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
             name: activities.name,
             distanceMeters: activities.distanceMeters,
             durationSeconds: activities.durationSeconds,
+            notes: activities.notes,
           })
           .from(activities)
           .where(
