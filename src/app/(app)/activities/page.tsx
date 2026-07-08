@@ -26,7 +26,6 @@ type ActivityRow = {
   maxHeartRate: number | null;
   calories: number | null;
   elevationGainMeters: number | null;
-  notesTitle: string | null;
   notes: string | null;
 };
 
@@ -174,18 +173,10 @@ export default function ActivitiesPage() {
                           {a.name?.trim() || label}
                         </p>
                         {detail && <p className="text-xs text-neutral-500 mt-0.5">{detail}</p>}
-                        {(a.notesTitle?.trim() || a.notes?.trim()) && (
+                        {a.notes?.trim() && (
                           <p className="mt-1.5 flex items-start gap-1 text-xs text-neutral-400">
                             <StickyNote size={12} className="mt-0.5 shrink-0 text-neutral-500" />
-                            <span className="line-clamp-2 whitespace-pre-wrap">
-                              {a.notesTitle?.trim() && (
-                                <span className="font-medium text-neutral-300">
-                                  {a.notesTitle.trim()}
-                                  {a.notes?.trim() ? " · " : ""}
-                                </span>
-                              )}
-                              {a.notes?.trim()}
-                            </span>
+                            <span className="line-clamp-2 whitespace-pre-wrap">{a.notes.trim()}</span>
                           </p>
                         )}
                       </div>
