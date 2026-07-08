@@ -199,6 +199,8 @@ export const planNotes = pgTable("plan_notes", {
   athleteUserId: text("athlete_user_id").notNull(),
   coachUserId: text("coach_user_id"),
   date: date("date").notNull(),
+  // Optional heading shown above the note body on the plan.
+  title: text("title"),
   body: text("body").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });

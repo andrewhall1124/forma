@@ -27,6 +27,7 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/plan-notes
     if (!body.body.trim()) return Response.json({ error: "body required" }, { status: 400 });
     updates.body = body.body.trim();
   }
+  if (typeof body.title === "string") updates.title = body.title.trim() || null;
   if (typeof body.date === "string") updates.date = body.date;
 
   const [updated] = await db

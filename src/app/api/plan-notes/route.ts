@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       athleteUserId: subjectUserId,
       coachUserId: coachView ? userId : null,
       date: body.date,
+      title: body.title?.trim() || null,
       body: body.body.trim(),
     })
     .returning();

@@ -62,6 +62,7 @@ type WorkoutTemplate = {
 type PlanNote = {
   id: number;
   date: string;
+  title: string | null;
   body: string;
 };
 
@@ -147,7 +148,7 @@ type FormState = {
   templateId: number | null;
 };
 
-type NoteForm = { id: number | null; date: string; body: string };
+type NoteForm = { id: number | null; date: string; title: string; body: string };
 type RaceForm = {
   id: number | null;
   date: string;
@@ -310,7 +311,7 @@ export default function PlanPage() {
         {
           method: noteForm.id === null ? "POST" : "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: noteForm.date, body: noteForm.body }),
+          body: JSON.stringify({ date: noteForm.date, title: noteForm.title, body: noteForm.body }),
         },
       );
       setNoteForm(null);
@@ -613,7 +614,7 @@ export default function PlanPage() {
           </p>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setNoteForm({ id: null, date: selectedDate, body: "" })}
+              onClick={() => setNoteForm({ id: null, date: selectedDate, title: "", body: "" })}
               className="flex items-center gap-1 text-xs text-neutral-500 hover:text-accent-400 transition-colors"
             >
               <StickyNote size={12} /> Note
@@ -662,11 +663,18 @@ export default function PlanPage() {
               >
                 <div className="flex items-start gap-3 min-w-0">
                   <StickyNote size={16} className="text-neutral-400 mt-0.5 shrink-0" />
-                  <p className="text-sm text-neutral-200 whitespace-pre-wrap min-w-0">{n.body}</p>
+                  <div className="min-w-0">
+                    {n.title && (
+                      <p className="text-sm font-semibold text-neutral-100">{n.title}</p>
+                    )}
+                    <p className="text-sm text-neutral-200 whitespace-pre-wrap">{n.body}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
-                    onClick={() => setNoteForm({ id: n.id, date: n.date, body: n.body })}
+                    onClick={() =>
+                      setNoteForm({ id: n.id, date: n.date, title: n.title ?? "", body: n.body })
+                    }
                     className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
                     aria-label="Edit note"
                   >
@@ -1013,11 +1021,17 @@ export default function PlanPage() {
                 <X size={16} />
               </button>
             </div>
+            <input
+              value={noteForm.title}
+              onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
+              autoFocus
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-medium outline-none focus:border-neutral-500 placeholder-neutral-600"
+              placeholder="Title (optional)"
+            />
             <textarea
               value={noteForm.body}
               onChange={(e) => setNoteForm({ ...noteForm, body: e.target.value })}
               rows={4}
-              autoFocus
               required
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm outline-none focus:border-neutral-500 placeholder-neutral-600 resize-none"
               placeholder="Feeling, travel, cross-training, anything for this day…"
