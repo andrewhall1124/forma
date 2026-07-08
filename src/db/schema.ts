@@ -32,6 +32,8 @@ export const activities = pgTable("activities", {
   aerobicTrainingEffect: real("aerobic_training_effect"),
   anaerobicTrainingEffect: real("anaerobic_training_effect"),
   avgStrideLengthCm: real("avg_stride_length_cm"),
+  // User-authored notes on the activity. Never touched by the Garmin sync.
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -186,6 +188,31 @@ export const plannedWorkouts = pgTable("planned_workouts", {
   status: text("status").notNull().default("planned"),
   // The Garmin-synced activity that fulfilled this workout, once linked.
   linkedActivityId: integer("linked_activity_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// A free-form note attached to a day of the plan, independent of any workout.
+// Lets an athlete (or coach) jot context on a date without faking an "other"
+// workout. coach_user_id is null when the athlete wrote it themselves.
+export const planNotes = pgTable("plan_notes", {
+  id: serial("id").primaryKey(),
+  athleteUserId: text("athlete_user_id").notNull(),
+  coachUserId: text("coach_user_id"),
+  date: date("date").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// A goal race on the athlete's plan. Drives the countdown on the plan page and
+// a marker on the calendar. coach_user_id is null when self-added.
+export const races = pgTable("races", {
+  id: serial("id").primaryKey(),
+  athleteUserId: text("athlete_user_id").notNull(),
+  coachUserId: text("coach_user_id"),
+  date: date("date").notNull(),
+  name: text("name").notNull(),
+  distanceMeters: real("distance_meters"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

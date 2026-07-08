@@ -20,6 +20,31 @@ export function localDateStr(timeZone?: string, date: Date = new Date()): string
   }).format(date);
 }
 
+// Shift a YYYY-MM-DD string by `days`, staying on calendar-day boundaries
+// (UTC math avoids DST hour drift; the string carries no time).
+export function addDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+// A friendly label for a calendar day relative to `today`: "Today",
+// "Yesterday", "Tomorrow", else e.g. "Mon, Jul 7".
+export function relativeDayLabel(dateStr: string, today: string): string {
+  const diff = Math.round(
+    (Date.parse(`${dateStr}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
+  );
+  if (diff === 0) return "Today";
+  if (diff === -1) return "Yesterday";
+  if (diff === 1) return "Tomorrow";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 // The last `n` local calendar days as YYYY-MM-DD strings, oldest first,
 // ending today. Used to zero-fill history charts so days with no logs render
 // as empty slots instead of silently compressing the x-axis.

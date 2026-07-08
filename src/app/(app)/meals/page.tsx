@@ -4,9 +4,10 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Camera, Plus, X, Check, RotateCcw, Minus, Pencil, Trash2, ChevronDown, ChevronUp, Type, BookOpen } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { localDateStr, lastNDateStrs } from "@/lib/date";
+import { localDateStr, lastNDateStrs, relativeDayLabel } from "@/lib/date";
 import { useCoachMode } from "@/lib/athlete-mode";
 import { DailyHistoryChart } from "@/components/daily-history-chart";
+import { DateNav } from "@/components/date-nav";
 
 type Ingredient = {
   name: string;
@@ -79,12 +80,10 @@ const MACRO_FIELDS = [
 
 type MacroKey = (typeof MACRO_FIELDS)[number]["key"];
 
-function todayStr() {
-  return localDateStr();
-}
-
 export default function MealsPage() {
   const coachMode = useCoachMode();
+  const today = localDateStr();
+  const [date, setDate] = useState(today);
   const [mealList, setMealList] = useState<Meal[]>([]);
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
   const [history, setHistory] = useState<NutritionDay[]>([]);
@@ -104,7 +103,7 @@ export default function MealsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function loadMeals() {
-    const res = await fetch(`/api/meals?date=${todayStr()}`);
+    const res = await fetch(`/api/meals?date=${date}`);
     setMealList(await res.json());
   }
 
@@ -131,6 +130,9 @@ export default function MealsPage() {
 
   useEffect(() => {
     loadMeals();
+  }, [date]);
+
+  useEffect(() => {
     loadRecent();
     loadHistory();
   }, []);
@@ -288,7 +290,7 @@ export default function MealsPage() {
         await fetch("/api/meals", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, date: todayStr() }),
+          body: JSON.stringify({ ...payload, date }),
         });
       }
 
@@ -362,9 +364,11 @@ export default function MealsPage() {
 
   return (
     <div className="p-4 space-y-4">
+      <DateNav value={date} today={today} onChange={setDate} />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs text-neutral-400">Today</p>
+          <p className="text-xs text-neutral-400">{relativeDayLabel(date, today)}</p>
           <p className="text-3xl font-bold">{Math.round(totalCalories)}</p>
           <p className="text-xs text-neutral-400">kcal consumed</p>
           <div className="flex gap-3 mt-1.5 text-xs text-neutral-500">
@@ -394,7 +398,7 @@ export default function MealsPage() {
       </div>
 
       {mealList.length === 0 ? (
-        <p className="text-center text-neutral-500 text-sm py-12">No meals logged today</p>
+        <p className="text-center text-neutral-500 text-sm py-12">No meals logged</p>
       ) : (
         <div className="space-y-2">
           {mealList.map((meal) => {

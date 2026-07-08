@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { Droplets, Plus } from "lucide-react";
-import { localDateStr, lastNDateStrs } from "@/lib/date";
+import { localDateStr, lastNDateStrs, relativeDayLabel } from "@/lib/date";
 import { useCoachMode } from "@/lib/athlete-mode";
 import { DailyHistoryChart } from "@/components/daily-history-chart";
+import { DateNav } from "@/components/date-nav";
 
 type WaterLog = {
   id: number;
@@ -22,22 +23,20 @@ const QUICK_ADD = [250, 500, 750, 1000];
 const DAILY_GOAL_ML = 2500;
 const HISTORY_DAYS = 30;
 
-function todayStr() {
-  return localDateStr();
-}
-
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 export default function WaterPage() {
   const coachMode = useCoachMode();
+  const today = localDateStr();
+  const [date, setDate] = useState(today);
   const [logs, setLogs] = useState<WaterLog[]>([]);
   const [history, setHistory] = useState<WaterDay[]>([]);
   const [adding, setAdding] = useState(false);
 
   async function loadLogs() {
-    const res = await fetch(`/api/water?date=${todayStr()}`);
+    const res = await fetch(`/api/water?date=${date}`);
     setLogs(await res.json());
   }
 
@@ -49,6 +48,9 @@ export default function WaterPage() {
 
   useEffect(() => {
     loadLogs();
+  }, [date]);
+
+  useEffect(() => {
     loadHistory();
   }, []);
 
@@ -72,7 +74,7 @@ export default function WaterPage() {
       await fetch("/api/water", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: todayStr(), amountMl: ml }),
+        body: JSON.stringify({ date, amountMl: ml }),
       });
       await Promise.all([loadLogs(), loadHistory()]);
     } finally {
@@ -82,6 +84,8 @@ export default function WaterPage() {
 
   return (
     <div className="flex-1 flex flex-col p-4 gap-6">
+      <DateNav value={date} today={today} onChange={setDate} />
+
       {/* Ring — fills available vertical space and centers */}
       <div className="flex-1 flex flex-col items-center justify-center gap-4 min-h-0">
         <div className="relative flex items-center justify-center w-44 h-44">
@@ -154,7 +158,9 @@ export default function WaterPage() {
 
       {logs.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Today&apos;s Log</p>
+          <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+            {relativeDayLabel(date, today)}&apos;s Log
+          </p>
           {logs.map((log) => (
             <div
               key={log.id}

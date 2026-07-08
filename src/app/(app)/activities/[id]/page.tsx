@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Pencil, StickyNote, X } from "lucide-react";
+import { useCoachMode } from "@/lib/athlete-mode";
 import {
   BarChart,
   Bar,
@@ -44,6 +45,7 @@ type ActivityRow = {
   aerobicTrainingEffect: number | null;
   anaerobicTrainingEffect: number | null;
   avgStrideLengthCm: number | null;
+  notes: string | null;
 };
 
 type Lap = {
@@ -106,11 +108,16 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 export default function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const coachMode = useCoachMode();
   const [activity, setActivity] = useState<ActivityRow | null>(null);
   const [laps, setLaps] = useState<Lap[]>([]);
   const [details, setDetails] = useState<Details>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   useEffect(() => {
     fetch(`/api/activities/${id}`)
@@ -122,10 +129,29 @@ export default function ActivityDetailPage() {
         setActivity(data.activity);
         setLaps(data.laps ?? []);
         setDetails(data.details ?? null);
+        setNotes(data.activity?.notes ?? "");
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [id]);
+
+  async function saveNotes() {
+    setSavingNotes(true);
+    try {
+      const res = await fetch(`/api/activities/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: draft }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setNotes(updated.notes ?? "");
+        setEditingNotes(false);
+      }
+    } finally {
+      setSavingNotes(false);
+    }
+  }
 
   if (loading) return <p className="p-4 text-sm text-neutral-500">Loading…</p>;
 
@@ -241,6 +267,60 @@ export default function ActivityDetailPage() {
           />
         )}
       </div>
+
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-1.5 text-sm font-medium text-neutral-400">
+            <StickyNote size={14} /> Notes
+          </h3>
+          {coachMode === null && !editingNotes && (
+            <button
+              onClick={() => {
+                setDraft(notes);
+                setEditingNotes(true);
+              }}
+              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-accent-400 transition-colors"
+            >
+              <Pencil size={12} /> {notes ? "Edit" : "Add"}
+            </button>
+          )}
+        </div>
+        {editingNotes ? (
+          <div className="space-y-2">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={4}
+              autoFocus
+              placeholder="How did it feel? Conditions, effort, injuries…"
+              className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-neutral-500 placeholder-neutral-600 resize-none"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingNotes(false)}
+                className="flex items-center justify-center gap-1 flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
+              >
+                <X size={14} /> Cancel
+              </button>
+              <button
+                onClick={saveNotes}
+                disabled={savingNotes}
+                className="flex items-center justify-center gap-1 flex-1 rounded-lg bg-accent-500 text-neutral-950 py-2 text-sm font-medium hover:bg-accent-400 disabled:opacity-50"
+              >
+                {savingNotes ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save
+              </button>
+            </div>
+          </div>
+        ) : notes ? (
+          <p className="whitespace-pre-wrap rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-200">
+            {notes}
+          </p>
+        ) : (
+          <p className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-600">
+            {coachMode === null ? "No notes yet." : "No notes."}
+          </p>
+        )}
+      </section>
 
       {zones.length > 0 && (
         <section className="space-y-2">
