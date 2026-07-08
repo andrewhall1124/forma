@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, StickyNote } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -26,6 +26,7 @@ type ActivityRow = {
   maxHeartRate: number | null;
   calories: number | null;
   elevationGainMeters: number | null;
+  notes: string | null;
 };
 
 // Filter chips — "all" plus the types we expect to see often.
@@ -172,6 +173,12 @@ export default function ActivitiesPage() {
                           {a.name?.trim() || label}
                         </p>
                         {detail && <p className="text-xs text-neutral-500 mt-0.5">{detail}</p>}
+                        {a.notes?.trim() && (
+                          <p className="mt-1.5 flex items-start gap-1 text-xs text-neutral-400">
+                            <StickyNote size={12} className="mt-0.5 shrink-0 text-neutral-500" />
+                            <span className="line-clamp-2 whitespace-pre-wrap">{a.notes.trim()}</span>
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-start gap-1 shrink-0 ml-3">
