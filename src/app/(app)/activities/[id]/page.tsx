@@ -45,6 +45,7 @@ type ActivityRow = {
   aerobicTrainingEffect: number | null;
   anaerobicTrainingEffect: number | null;
   avgStrideLengthCm: number | null;
+  notesTitle: string | null;
   notes: string | null;
 };
 
@@ -115,8 +116,10 @@ export default function ActivityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [notes, setNotes] = useState("");
+  const [notesTitle, setNotesTitle] = useState("");
   const [editingNotes, setEditingNotes] = useState(false);
   const [draft, setDraft] = useState("");
+  const [draftTitle, setDraftTitle] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
 
   useEffect(() => {
@@ -130,6 +133,7 @@ export default function ActivityDetailPage() {
         setLaps(data.laps ?? []);
         setDetails(data.details ?? null);
         setNotes(data.activity?.notes ?? "");
+        setNotesTitle(data.activity?.notesTitle ?? "");
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
@@ -141,11 +145,12 @@ export default function ActivityDetailPage() {
       const res = await fetch(`/api/activities/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notes: draft }),
+        body: JSON.stringify({ notes: draft, notesTitle: draftTitle }),
       });
       if (res.ok) {
         const updated = await res.json();
         setNotes(updated.notes ?? "");
+        setNotesTitle(updated.notesTitle ?? "");
         setEditingNotes(false);
       }
     } finally {
@@ -277,21 +282,28 @@ export default function ActivityDetailPage() {
             <button
               onClick={() => {
                 setDraft(notes);
+                setDraftTitle(notesTitle);
                 setEditingNotes(true);
               }}
               className="flex items-center gap-1 text-xs text-neutral-500 hover:text-accent-400 transition-colors"
             >
-              <Pencil size={12} /> {notes ? "Edit" : "Add"}
+              <Pencil size={12} /> {notes || notesTitle ? "Edit" : "Add"}
             </button>
           )}
         </div>
         {editingNotes ? (
           <div className="space-y-2">
+            <input
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              autoFocus
+              placeholder="Title (optional)"
+              className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium outline-none focus:border-neutral-500 placeholder-neutral-600"
+            />
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               rows={4}
-              autoFocus
               placeholder="How did it feel? Conditions, effort, injuries…"
               className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm outline-none focus:border-neutral-500 placeholder-neutral-600 resize-none"
             />
@@ -311,10 +323,13 @@ export default function ActivityDetailPage() {
               </button>
             </div>
           </div>
-        ) : notes ? (
-          <p className="whitespace-pre-wrap rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-200">
-            {notes}
-          </p>
+        ) : notes || notesTitle ? (
+          <div className="space-y-1 rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+            {notesTitle && <p className="text-sm font-semibold text-neutral-100">{notesTitle}</p>}
+            {notes && (
+              <p className="whitespace-pre-wrap text-sm text-neutral-200">{notes}</p>
+            )}
+          </div>
         ) : (
           <p className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-sm text-neutral-600">
             {coachMode === null ? "No notes yet." : "No notes."}

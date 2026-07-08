@@ -32,7 +32,9 @@ export const activities = pgTable("activities", {
   aerobicTrainingEffect: real("aerobic_training_effect"),
   anaerobicTrainingEffect: real("anaerobic_training_effect"),
   avgStrideLengthCm: real("avg_stride_length_cm"),
-  // User-authored notes on the activity. Never touched by the Garmin sync.
+  // User-authored note (optional title + body) on the activity. Never touched
+  // by the Garmin sync.
+  notesTitle: text("notes_title"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });

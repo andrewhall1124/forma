@@ -14,10 +14,12 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/activities
   const { id } = await ctx.params;
   const body = await req.json();
   const notes = typeof body.notes === "string" ? body.notes.trim() || null : null;
+  const notesTitle =
+    typeof body.notesTitle === "string" ? body.notesTitle.trim() || null : null;
 
   const [updated] = await db
     .update(activities)
-    .set({ notes })
+    .set({ notes, notesTitle })
     .where(and(eq(activities.id, parseInt(id)), eq(activities.userId, subjectUserId!)))
     .returning();
 
