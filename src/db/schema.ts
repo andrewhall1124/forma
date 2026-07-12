@@ -105,6 +105,8 @@ export const bodyComposition = pgTable(
     weightKg: real("weight_kg"),
     bodyFatPct: real("body_fat_pct"),
     muscleMassKg: real("muscle_mass_kg"),
+    boneMassKg: real("bone_mass_kg"),
+    bodyWaterPct: real("body_water_pct"),
     bmi: real("bmi"),
     createdAt: timestamp("created_at").defaultNow(),
   },

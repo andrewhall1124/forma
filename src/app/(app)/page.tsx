@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { cookies } from "next/headers";
 import { resolveViewer } from "@/lib/access";
 import { db } from "@/db";
-import { meals, waterLogs, sleepLogs, activities, dailySummaries } from "@/db/schema";
+import { meals, waterLogs, sleepLogs, activities, dailySummaries, bodyComposition } from "@/db/schema";
 import { desc, eq, sql, and } from "drizzle-orm";
 import { localDateStr, DEFAULT_TIME_ZONE } from "@/lib/date";
 
@@ -29,7 +29,7 @@ export default async function Dashboard() {
   const tz = (await cookies()).get("tz")?.value || DEFAULT_TIME_ZONE;
   const today = localDateStr(tz);
 
-  const [[macroRow], [waterRow], [lastSleep], [lastActivity], [lastSummary]] = await Promise.all([
+  const [[macroRow], [waterRow], [lastSleep], [lastActivity], [lastSummary], [lastBody]] = await Promise.all([
     db
       .select({
         calories: sql<number>`coalesce(sum(coalesce(${meals.calories}, 0) * coalesce(${meals.servings}, 1)), 0)`,
@@ -56,6 +56,13 @@ export default async function Dashboard() {
       // The table is created by the first Garmin sync; render "no data"
       // instead of crashing the dashboard until then.
       .catch(() => []),
+    db
+      .select()
+      .from(bodyComposition)
+      .where(eq(bodyComposition.userId, userId!))
+      .orderBy(desc(bodyComposition.date))
+      .limit(1)
+      .catch(() => []),
   ]);
 
   const calories = macroRow?.calories ?? 0;
@@ -71,6 +78,8 @@ export default async function Dashboard() {
   // mistaken for today's.
   const summaryDateSuffix =
     lastSummary && lastSummary.date !== today ? ` · ${lastSummary.date}` : "";
+  const weightLb =
+    lastBody?.weightKg != null ? lastBody.weightKg * 2.20462 : null;
 
   return (
     <div className="p-4 space-y-4">
@@ -120,6 +129,21 @@ export default async function Dashboard() {
           sub={lastSleep ? `score ${lastSleep.sleepScore ?? "—"} · ${lastSleep.date}` : "no data"}
           progress={lastSleep?.totalSleepSeconds ? lastSleep.totalSleepSeconds / (8 * 3600) : undefined}
           progressColor="bg-[#a98fb0]"
+        />
+        <StatCard
+          label="Weight"
+          value={weightLb != null ? weightLb.toFixed(1) : "—"}
+          unit={weightLb != null ? "lb" : ""}
+          sub={
+            lastBody
+              ? [
+                  lastBody.bodyFatPct != null ? `${lastBody.bodyFatPct.toFixed(1)}% fat` : null,
+                  lastBody.date,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "no data"
+          }
         />
         <StatCard
           label="Last Activity"

@@ -513,16 +513,20 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30, us
                 continue
 
             muscle_g = m.get("muscleMass")
+            bone_g = m.get("boneMass")
 
             cur.execute(
                 """
                 INSERT INTO body_composition
-                    (date, user_id, weight_kg, body_fat_pct, muscle_mass_kg, bmi)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (date, user_id, weight_kg, body_fat_pct, muscle_mass_kg,
+                     bone_mass_kg, body_water_pct, bmi)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_id, date) DO UPDATE SET
                     weight_kg      = EXCLUDED.weight_kg,
                     body_fat_pct   = EXCLUDED.body_fat_pct,
                     muscle_mass_kg = EXCLUDED.muscle_mass_kg,
+                    bone_mass_kg   = EXCLUDED.bone_mass_kg,
+                    body_water_pct = EXCLUDED.body_water_pct,
                     bmi            = EXCLUDED.bmi
                 """,
                 (
@@ -531,6 +535,8 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30, us
                     weight_g / 1000,
                     m.get("bodyFat"),
                     muscle_g / 1000 if muscle_g is not None else None,
+                    bone_g / 1000 if bone_g is not None else None,
+                    m.get("bodyWater"),
                     m.get("bmi"),
                 ),
             )
