@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -38,25 +39,23 @@ function NavItem({
 export default function MobileNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close the drawer whenever the route changes (e.g. after tapping a link).
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open menu"
-        className="flex items-center justify-center w-8 h-8 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
-      >
-        <Menu size={18} />
-      </button>
-
-      {/* Always mounted so the drawer can slide/fade rather than pop in. */}
-      <div className={cn("fixed inset-0 z-30 md:hidden", !open && "pointer-events-none")}>
+  // The overlay is portalled to <body> so it isn't trapped by the header's
+  // backdrop-blur: backdrop-filter makes an element a containing block for
+  // fixed-position descendants (notably on iOS Safari), which would otherwise
+  // clamp the drawer to the header strip instead of the viewport.
+  const overlay = (
+    <div className={cn("fixed inset-0 z-30 md:hidden", !open && "pointer-events-none")}>
         <div
           className={cn(
             "absolute inset-0 bg-black/60 transition-opacity",
@@ -93,6 +92,20 @@ export default function MobileNav() {
           </div>
         </aside>
       </div>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open menu"
+        className="flex items-center justify-center w-8 h-8 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+      >
+        <Menu size={18} />
+      </button>
+
+      {mounted && createPortal(overlay, document.body)}
     </>
   );
 }
