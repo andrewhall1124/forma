@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Droplets, Plus } from "lucide-react";
+import { Droplets, Plus, Pencil, Trash2, Check, X } from "lucide-react";
 import { localDateStr, lastNDateStrs, relativeDayLabel } from "@/lib/date";
 import { useCoachMode } from "@/lib/athlete-mode";
 import { DailyHistoryChart } from "@/components/daily-history-chart";
@@ -34,6 +34,8 @@ export default function WaterPage() {
   const [logs, setLogs] = useState<WaterLog[]>([]);
   const [history, setHistory] = useState<WaterDay[]>([]);
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editAmount, setEditAmount] = useState("");
 
   async function loadLogs() {
     const res = await fetch(`/api/water?date=${date}`);
@@ -81,6 +83,30 @@ export default function WaterPage() {
     } finally {
       setAdding(false);
     }
+  }
+
+  function startEdit(log: WaterLog) {
+    setEditingId(log.id);
+    setEditAmount(String(log.amountMl));
+  }
+
+  async function saveEdit(id: number) {
+    const ml = Math.round(parseFloat(editAmount));
+    if (!ml || ml <= 0) return;
+    setEditingId(null);
+    await fetch(`/api/water/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amountMl: ml }),
+    });
+    await Promise.all([loadLogs(), loadHistory()]);
+  }
+
+  async function deleteWater(id: number) {
+    setEditingId(null);
+    setLogs((prev) => prev.filter((l) => l.id !== id));
+    await fetch(`/api/water/${id}`, { method: "DELETE" });
+    await loadHistory();
   }
 
   return (
@@ -168,13 +194,68 @@ export default function WaterPage() {
               key={log.id}
               className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3"
             >
-              <div className="flex items-center gap-2 text-blue-400">
-                <Droplets size={14} />
-                <span className="text-sm font-medium text-white">
-                  {log.amountMl >= 1000 ? `${log.amountMl / 1000}L` : `${log.amountMl} mL`}
-                </span>
-              </div>
-              <span className="text-xs text-neutral-500">{formatTime(log.loggedAt)}</span>
+              {editingId === log.id ? (
+                <>
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <Droplets size={14} />
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      autoFocus
+                      value={editAmount}
+                      onChange={(e) => setEditAmount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEdit(log.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="w-20 rounded-lg bg-neutral-800 border border-neutral-700 px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                    <span className="text-xs text-neutral-500">mL</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => saveEdit(log.id)}
+                      className="p-1.5 text-neutral-500 hover:text-blue-400 transition-colors"
+                    >
+                      <Check size={15} />
+                    </button>
+                    <button
+                      onClick={() => setEditingId(null)}
+                      className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <Droplets size={14} />
+                    <span className="text-sm font-medium text-white">
+                      {log.amountMl >= 1000 ? `${log.amountMl / 1000}L` : `${log.amountMl} mL`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-neutral-500">{formatTime(log.loggedAt)}</span>
+                    {!coachMode && (
+                      <>
+                        <button
+                          onClick={() => startEdit(log)}
+                          className="p-1.5 text-neutral-500 hover:text-neutral-200 transition-colors"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => deleteWater(log.id)}
+                          className="p-1.5 text-neutral-500 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
