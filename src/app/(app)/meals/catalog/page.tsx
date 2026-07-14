@@ -83,7 +83,7 @@ export default function CatalogPage() {
     <div className="p-4 space-y-4">
       <div className="flex items-center gap-3">
         <Link
-          href="/meals"
+          href={`/meals?date=${date}`}
           className="flex items-center justify-center w-9 h-9 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors shrink-0"
         >
           <ArrowLeft size={18} />

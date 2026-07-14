@@ -128,6 +128,12 @@ export default function MealsPage() {
     setHistory(await res.json());
   }
 
+  // Honor ?date= so returning from the catalog lands on the day you were viewing.
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get("date");
+    if (d) setDate(d);
+  }, []);
+
   useEffect(() => {
     loadMeals();
   }, [date]);
