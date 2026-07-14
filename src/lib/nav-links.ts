@@ -1,4 +1,4 @@
-import { Home, UtensilsCrossed, Droplets, Activity, Moon, Footprints, ClipboardList, Scale, Users, Settings, LucideIcon } from "lucide-react";
+import { Home, UtensilsCrossed, Droplets, Activity, Moon, Footprints, ClipboardList, Scale, Users, Settings, Sparkles, LucideIcon } from "lucide-react";
 
 export type NavLink = {
   href: string;
@@ -8,6 +8,7 @@ export type NavLink = {
 
 export const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Home", icon: Home },
+  { href: "/assistant", label: "Coach", icon: Sparkles },
   { href: "/plan", label: "Plan", icon: ClipboardList },
   { href: "/meals", label: "Meals", icon: UtensilsCrossed },
   { href: "/water", label: "Water", icon: Droplets },
@@ -20,6 +21,6 @@ export const NAV_LINKS: NavLink[] = [
 // Utility destinations that live in the sidebar footer (desktop) and the
 // bottom of the mobile drawer, but never in the main nav list.
 export const SECONDARY_LINKS: NavLink[] = [
-  { href: "/coach", label: "Coach", icon: Users },
+  { href: "/coach", label: "Coaching", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

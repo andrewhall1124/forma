@@ -44,7 +44,7 @@ export default function SideNav() {
           )}
         >
           <Users size={18} />
-          Coach
+          Coaching
         </Link>
         <Link
           href="/settings"
