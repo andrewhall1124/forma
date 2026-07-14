@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/db";
 import {
   activities,
+  activityLaps,
   bodyComposition,
   sleepLogs,
   meals,
@@ -66,7 +67,7 @@ export const COACH_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_activities",
     description:
-      "Individual workouts (Garmin). Each row has date, name, type, distance (m), duration (s), average pace (sec/km), avg/max heart rate, aerobic training effect, and cadence. Use to inspect specific sessions, quality workouts, or long runs.",
+      "Individual workouts (Garmin). Each row has an id (garminActivityId), date, name, type, distance (m), duration (s), average pace (sec/km), avg/max heart rate, aerobic training effect, and cadence. NOTE: pace here is the whole-session AVERAGE, which hides intervals — for a workout with fast reps and slow recoveries it looks moderate. To judge how fast the athlete actually ran during a session (intervals, tempo, progression), pass its id to get_activity_splits. Workouts named like '... Workout (N)' are almost always structured interval sessions.",
     input_schema: {
       type: "object",
       properties: {
@@ -77,6 +78,21 @@ export const COACH_TOOLS: Anthropic.Tool[] = [
         },
         limit: { type: "integer", description: "Max rows to return. Default 40." },
       },
+    },
+  },
+  {
+    name: "get_activity_splits",
+    description:
+      "The per-lap splits for a single activity: each lap's distance (m), duration (s), pace (sec/km), avg/max heart rate, and cadence, in order. This is how you see the real work in an interval or tempo session — the fast reps and the recoveries — instead of the session average. Get the id from get_activities first.",
+    input_schema: {
+      type: "object",
+      properties: {
+        garminActivityId: {
+          type: "string",
+          description: "The activity's id, from a get_activities row.",
+        },
+      },
+      required: ["garminActivityId"],
     },
   },
   {
@@ -188,6 +204,7 @@ export async function runCoachTool(
         : and(eq(activities.userId, userId), gte(activities.date, cutoff(days)));
       const rows = await db
         .select({
+          id: activities.garminActivityId,
           date: activities.date,
           name: activities.name,
           type: activities.activityType,
@@ -204,6 +221,26 @@ export async function runCoachTool(
         .orderBy(desc(activities.date))
         .limit(limit);
       return { count: rows.length, rows };
+    }
+
+    case "get_activity_splits": {
+      const gid = typeof input.garminActivityId === "string" ? input.garminActivityId : "";
+      if (!gid) return { error: "garminActivityId is required" };
+      // Filter by userId as well so a session can only read its own splits.
+      const laps = await db
+        .select({
+          lap: activityLaps.lapIndex,
+          distanceMeters: activityLaps.distanceMeters,
+          durationSeconds: activityLaps.durationSeconds,
+          paceSecPerKm: activityLaps.avgPaceSecondsPerKm,
+          avgHr: activityLaps.avgHeartRate,
+          maxHr: activityLaps.maxHeartRate,
+          cadence: activityLaps.avgCadence,
+        })
+        .from(activityLaps)
+        .where(and(eq(activityLaps.userId, userId), eq(activityLaps.garminActivityId, gid)))
+        .orderBy(asc(activityLaps.lapIndex));
+      return { count: laps.length, laps };
     }
 
     case "get_sleep": {
