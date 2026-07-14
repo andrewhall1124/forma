@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Search, Plus, Check } from "lucide-react";
-import { localDateStr } from "@/lib/date";
+import { localDateStr, relativeDayLabel } from "@/lib/date";
 
 type Ingredient = {
   name: string;
@@ -30,15 +30,19 @@ type Meal = {
   createdAt: string;
 };
 
-function todayStr() {
-  return localDateStr();
-}
-
 export default function CatalogPage() {
+  const today = localDateStr();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [addedNames, setAddedNames] = useState<Set<string>>(new Set());
+  // The day meals are added to — passed from the meals page via ?date=.
+  const [date, setDate] = useState(today);
+
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get("date");
+    if (d) setDate(d);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -48,17 +52,19 @@ export default function CatalogPage() {
     })();
   }, []);
 
+  const dayLabel = relativeDayLabel(date, today);
+
   const filtered = meals.filter((m) =>
     m.name.toLowerCase().includes(query.trim().toLowerCase())
   );
 
-  async function addToToday(meal: Meal) {
+  async function addToDay(meal: Meal) {
     setAddedNames((prev) => new Set(prev).add(meal.name));
     await fetch("/api/meals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        date: todayStr(),
+        date,
         mealType: meal.mealType,
         name: meal.name,
         description: meal.description,
@@ -84,7 +90,7 @@ export default function CatalogPage() {
         </Link>
         <div>
           <h1 className="text-xl font-bold leading-tight">Meal Catalog</h1>
-          <p className="text-xs text-neutral-400">Your previously logged meals</p>
+          <p className="text-xs text-neutral-400">Adding to {dayLabel}</p>
         </div>
       </div>
 
@@ -126,7 +132,7 @@ export default function CatalogPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => addToToday(meal)}
+                  onClick={() => addToDay(meal)}
                   disabled={added}
                   className={
                     added
@@ -134,7 +140,7 @@ export default function CatalogPage() {
                       : "flex items-center gap-1.5 rounded-full bg-accent-500 text-neutral-950 px-3 py-2 text-xs font-medium hover:bg-accent-400 active:bg-accent-600 shrink-0"
                   }
                 >
-                  {added ? <><Check size={14} /> Added</> : <><Plus size={14} /> Today</>}
+                  {added ? <><Check size={14} /> Added</> : <><Plus size={14} /> {dayLabel}</>}
                 </button>
               </div>
             );

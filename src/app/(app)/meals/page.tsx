@@ -416,7 +416,7 @@ export default function MealsPage() {
         {!coachMode && (
           <div className="flex items-center gap-2">
             <Link
-              href="/meals/catalog"
+              href={`/meals/catalog?date=${date}`}
               className="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-full border border-neutral-700 px-4 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 active:bg-neutral-700"
             >
               <BookOpen size={16} />
