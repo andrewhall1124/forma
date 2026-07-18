@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "forma": {
-      "command": "node",
-      "args": ["tools/forma-mcp.mjs"]
-    }
-  }
-}
