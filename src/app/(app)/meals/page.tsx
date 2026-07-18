@@ -8,6 +8,7 @@ import { localDateStr, lastNDateStrs, relativeDayLabel } from "@/lib/date";
 import { useCoachMode } from "@/lib/athlete-mode";
 import { DailyHistoryChart } from "@/components/daily-history-chart";
 import { DateNav } from "@/components/date-nav";
+import { DEFAULT_MACRO_GOALS, type MacroGoals } from "@/lib/macro-goals";
 
 type Ingredient = {
   name: string;
@@ -61,12 +62,13 @@ type NutritionDay = {
 
 const HISTORY_DAYS = 30;
 
-// Daily targets and colors match the dashboard's nutrition card.
+// Labels and colors match the dashboard's nutrition card. Each key doubles as
+// the MacroGoals field, so the per-user target is goals[key].
 const HISTORY_METRICS = [
-  { key: "calories", label: "Calories", unit: " kcal", target: 3400, color: "#dd9f57" },
-  { key: "proteinG", label: "Protein", unit: "g", target: 165, color: "#c47a52" },
-  { key: "carbsG", label: "Carbs", unit: "g", target: 462, color: "#e7b86a" },
-  { key: "fatG", label: "Fat", unit: "g", target: 90, color: "#9a9b63" },
+  { key: "calories", label: "Calories", unit: " kcal", color: "#dd9f57" },
+  { key: "proteinG", label: "Protein", unit: "g", color: "#c47a52" },
+  { key: "carbsG", label: "Carbs", unit: "g", color: "#e7b86a" },
+  { key: "fatG", label: "Fat", unit: "g", color: "#9a9b63" },
 ] as const;
 
 type HistoryMetricKey = (typeof HISTORY_METRICS)[number]["key"];
@@ -87,6 +89,7 @@ export default function MealsPage() {
   const [mealList, setMealList] = useState<Meal[]>([]);
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
   const [history, setHistory] = useState<NutritionDay[]>([]);
+  const [goals, setGoals] = useState<MacroGoals>(DEFAULT_MACRO_GOALS);
   const [historyMetric, setHistoryMetric] = useState<HistoryMetricKey>("calories");
   const [expandedMealId, setExpandedMealId] = useState<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -128,6 +131,11 @@ export default function MealsPage() {
     setHistory(await res.json());
   }
 
+  async function loadGoals() {
+    const res = await fetch("/api/macro-goals");
+    if (res.ok) setGoals(await res.json());
+  }
+
   // Honor ?date= so returning from the catalog lands on the day you were viewing.
   useEffect(() => {
     const d = new URLSearchParams(window.location.search).get("date");
@@ -141,6 +149,7 @@ export default function MealsPage() {
   useEffect(() => {
     loadRecent();
     loadHistory();
+    loadGoals();
   }, []);
 
   const totalCalories = mealList.reduce((sum, m) => sum + (m.calories ?? 0) * (m.servings ?? 1), 0);
@@ -149,6 +158,7 @@ export default function MealsPage() {
   const totalFat = mealList.reduce((sum, m) => sum + (m.fatG ?? 0) * (m.servings ?? 1), 0);
 
   const historyMetricDef = HISTORY_METRICS.find((m) => m.key === historyMetric)!;
+  const historyGoal = goals[historyMetric];
   const historyByDate = new Map(history.map((d) => [d.date, d]));
   const historyChartData = lastNDateStrs(HISTORY_DAYS).map((d) => ({
     date: d.slice(5),
@@ -399,8 +409,8 @@ export default function MealsPage() {
             color={historyMetricDef.color}
             unit={historyMetricDef.unit}
             label={historyMetricDef.label}
-            goal={historyMetricDef.target}
-            goalLabel={`${historyMetricDef.target}${historyMetricDef.unit} target`}
+            goal={historyGoal}
+            goalLabel={`${historyGoal}${historyMetricDef.unit} target`}
             onSelectDate={setDate}
           />
         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Check, Loader2, Unlink, RefreshCw } from "lucide-react";
 import CoachingSettings from "@/components/coaching-settings";
+import MacroGoalsSettings from "@/components/macro-goals-settings";
 
 type GarminStatus = { connected: boolean; email: string | null };
 
@@ -155,6 +156,8 @@ export default function SettingsPage() {
           </form>
         )}
       </div>
+
+      <MacroGoalsSettings />
 
       <CoachingSettings />
     </div>

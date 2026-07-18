@@ -6,6 +6,8 @@ import { db } from "@/db";
 import { meals, waterLogs, sleepLogs, activities, dailySummaries, bodyComposition } from "@/db/schema";
 import { desc, eq, sql, and } from "drizzle-orm";
 import { localDateStr, DEFAULT_TIME_ZONE } from "@/lib/date";
+import { DEFAULT_MACRO_GOALS, type MacroGoals } from "@/lib/macro-goals";
+import { getMacroGoals } from "@/lib/macro-goals.server";
 
 function formatDist(m: number) {
   return (m / 1609.34).toFixed(2) + " mi";
@@ -28,6 +30,8 @@ export default async function Dashboard() {
   const { subjectUserId: userId } = await resolveViewer();
   const tz = (await cookies()).get("tz")?.value || DEFAULT_TIME_ZONE;
   const today = localDateStr(tz);
+
+  const goals = userId ? await getMacroGoals(userId) : DEFAULT_MACRO_GOALS;
 
   const [[macroRow], [waterRow], [lastSleep], [lastActivity], [lastSummary], [lastBody]] = await Promise.all([
     db
@@ -93,6 +97,7 @@ export default async function Dashboard() {
           protein={protein}
           carbs={carbs}
           fat={fat}
+          goals={goals}
         />
         <StatCard
           label="Water"
@@ -236,11 +241,13 @@ function NutritionCard({
   protein,
   carbs,
   fat,
+  goals,
 }: {
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+  goals: MacroGoals;
 }) {
   return (
     <div className="col-span-2 rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
@@ -248,10 +255,10 @@ function NutritionCard({
         <p className="text-xs text-neutral-400">Nutrition</p>
         <p className="text-xs text-neutral-500">today</p>
       </div>
-      <MacroRow label="Calories" value={calories} target={3400} unit="kcal" color="bg-[#dd9f57]" />
-      <MacroRow label="Carbs" value={carbs} target={462} unit="g" color="bg-[#e7b86a]" />
-      <MacroRow label="Protein" value={protein} target={165} unit="g" color="bg-[#c47a52]" />
-      <MacroRow label="Fat" value={fat} target={90} unit="g" color="bg-[#9a9b63]" />
+      <MacroRow label="Calories" value={calories} target={goals.calories} unit="kcal" color="bg-[#dd9f57]" />
+      <MacroRow label="Carbs" value={carbs} target={goals.carbsG} unit="g" color="bg-[#e7b86a]" />
+      <MacroRow label="Protein" value={protein} target={goals.proteinG} unit="g" color="bg-[#c47a52]" />
+      <MacroRow label="Fat" value={fat} target={goals.fatG} unit="g" color="bg-[#9a9b63]" />
     </div>
   );
 }

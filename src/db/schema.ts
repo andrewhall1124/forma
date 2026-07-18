@@ -247,3 +247,14 @@ export const garminConnections = pgTable("garmin_connections", {
   password: text("password").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Per-user daily nutrition targets shown on the dashboard and meals history.
+// One row per user; absence falls back to DEFAULT_MACRO_GOALS in code.
+export const nutritionGoals = pgTable("nutrition_goals", {
+  userId: text("user_id").primaryKey(),
+  calories: integer("calories").notNull(),
+  proteinG: integer("protein_g").notNull(),
+  carbsG: integer("carbs_g").notNull(),
+  fatG: integer("fat_g").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
