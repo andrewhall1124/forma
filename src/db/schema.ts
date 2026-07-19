@@ -102,6 +102,12 @@ export const bodyComposition = pgTable(
     id: serial("id").primaryKey(),
     userId: text("user_id"),
     date: date("date").notNull(),
+    // Exact time of the weigh-in and Garmin's per-sample id. Garmin's scale can
+    // record several weigh-ins a day; each is its own row keyed by samplePk.
+    // Legacy (pre-multi-weigh-in) rows have a null samplePk and measuredAt set
+    // to midnight of `date`.
+    measuredAt: timestamp("measured_at"),
+    garminSamplePk: text("garmin_sample_pk"),
     weightKg: real("weight_kg"),
     bodyFatPct: real("body_fat_pct"),
     muscleMassKg: real("muscle_mass_kg"),
@@ -110,7 +116,7 @@ export const bodyComposition = pgTable(
     bmi: real("bmi"),
     createdAt: timestamp("created_at").defaultNow(),
   },
-  (t) => [unique().on(t.userId, t.date)],
+  (t) => [unique().on(t.userId, t.garminSamplePk)],
 );
 
 // One row per calendar day of Garmin wellness data (steps, floors climbed).

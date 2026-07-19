@@ -14,6 +14,7 @@ import {
 type BodyComposition = {
   id: number;
   date: string;
+  measuredAt: string | null;
   weightKg: number | null;
   bodyFatPct: number | null;
   muscleMassKg: number | null;
@@ -29,9 +30,37 @@ function toLb(kg: number | null | undefined) {
   return kg == null ? null : kg * KG_TO_LB;
 }
 
-// A sparse line chart over actual weigh-ins. Unlike steps/sleep we don't
-// zero-fill missing days: body composition is only recorded when you step on
-// the scale, so a gap should skip, not drop the line to zero.
+type MetricKey = keyof Pick<
+  BodyComposition,
+  "weightKg" | "bodyFatPct" | "muscleMassKg" | "boneMassKg" | "bodyWaterPct" | "bmi"
+>;
+
+// Every tracked metric, with how to render it. `transform` converts the stored
+// value into display units (kg → lb); omitted means show as stored.
+const METRICS: {
+  key: MetricKey;
+  label: string;
+  unit: string;
+  color: string;
+  transform?: (v: number | null | undefined) => number | null;
+}[] = [
+  { key: "weightKg", label: "Weight", unit: " lb", color: "#6b9e78", transform: toLb },
+  { key: "bodyFatPct", label: "Body Fat", unit: "%", color: "#c47a52" },
+  { key: "muscleMassKg", label: "Muscle Mass", unit: " lb", color: "#dd9f57", transform: toLb },
+  { key: "boneMassKg", label: "Bone Mass", unit: " lb", color: "#9a9b63", transform: toLb },
+  { key: "bodyWaterPct", label: "Body Water", unit: "%", color: "#5b8fb0" },
+  { key: "bmi", label: "BMI", unit: "", color: "#b0885b" },
+];
+
+function mmdd(ms: number) {
+  const d = new Date(ms);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// A sparse line chart over actual weigh-ins, plotted on a real time axis so
+// several weigh-ins in one day land at distinct points. Unlike steps/sleep we
+// don't zero-fill missing days: body composition is only recorded when you step
+// on the scale, so a gap should skip, not drop the line to zero.
 function TrendChart({
   data,
   color,
@@ -39,7 +68,7 @@ function TrendChart({
   label,
   decimals = 1,
 }: {
-  data: { date: string; value: number }[];
+  data: { t: number; value: number }[];
   color: string;
   unit: string;
   label: string;
@@ -50,11 +79,15 @@ function TrendChart({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <XAxis
-            dataKey="date"
+            dataKey="t"
+            type="number"
+            scale="time"
+            domain={["dataMin", "dataMax"]}
             tick={{ fontSize: 11, fill: "#737373" }}
             axisLine={false}
             tickLine={false}
             minTickGap={24}
+            tickFormatter={(v) => mmdd(Number(v))}
           />
           <YAxis
             tick={{ fontSize: 11, fill: "#737373" }}
@@ -73,6 +106,7 @@ function TrendChart({
             }}
             labelStyle={{ color: "#e5e5e5" }}
             cursor={{ stroke: "#404040" }}
+            labelFormatter={(v) => mmdd(Number(v))}
             formatter={(v) => [`${Number(v).toFixed(decimals)}${unit}`, label]}
           />
           <Line
@@ -116,7 +150,7 @@ export default function BodyCompositionPage() {
 
   useEffect(() => {
     function load() {
-      fetch(`/api/body-composition?limit=${HISTORY_DAYS}`)
+      fetch(`/api/body-composition?days=${HISTORY_DAYS}`)
         .then((r) => r.json())
         .then(setRecords)
         .finally(() => setLoading(false));
@@ -130,14 +164,21 @@ export default function BodyCompositionPage() {
   const latest = records[0];
   const chrono = [...records].reverse();
 
-  const weightSeries = chrono
-    .filter((r) => r.weightKg != null)
-    .map((r) => ({ date: r.date.slice(5), value: toLb(r.weightKg)! }));
-  const fatSeries = chrono
-    .filter((r) => r.bodyFatPct != null)
-    .map((r) => ({ date: r.date.slice(5), value: r.bodyFatPct! }));
+  // A time-series for one metric over the chronological weigh-ins, x-keyed by
+  // the exact weigh-in time so multiple readings a day stay distinct.
+  const seriesFor = (m: (typeof METRICS)[number]) =>
+    chrono
+      .map((r) => {
+        const raw = r[m.key];
+        if (raw == null) return null;
+        const value = m.transform ? m.transform(raw) : raw;
+        if (value == null) return null;
+        return { t: Date.parse(r.measuredAt ?? r.date), value };
+      })
+      .filter((p): p is { t: number; value: number } => p != null);
 
   // Net weight change across the loaded window (oldest → newest weigh-in).
+  const weightSeries = seriesFor(METRICS[0]);
   const firstWeight = weightSeries[0]?.value;
   const lastWeight = weightSeries[weightSeries.length - 1]?.value;
   const weightDelta =
@@ -215,23 +256,18 @@ export default function BodyCompositionPage() {
         />
       </div>
 
-      {weightSeries.length > 1 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-            Weight · Last {HISTORY_DAYS} Days
-          </p>
-          <TrendChart data={weightSeries} color="#6b9e78" unit=" lb" label="Weight" />
-        </div>
-      )}
-
-      {fatSeries.length > 1 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-            Body Fat · Last {HISTORY_DAYS} Days
-          </p>
-          <TrendChart data={fatSeries} color="#c47a52" unit="%" label="Body Fat" />
-        </div>
-      )}
+      {METRICS.map((m) => {
+        const data = seriesFor(m);
+        if (data.length < 2) return null;
+        return (
+          <div key={m.key} className="space-y-2">
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
+              {m.label} · Last {HISTORY_DAYS} Days
+            </p>
+            <TrendChart data={data} color={m.color} unit={m.unit} label={m.label} />
+          </div>
+        );
+      })}
     </div>
   );
 }

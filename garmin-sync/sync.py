@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import garminconnect
 import psycopg2
@@ -506,22 +506,48 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30, us
         return 0
 
     with conn.cursor() as cur:
+        # Each Garmin weigh-in is its own row, keyed by samplePk, so several
+        # weigh-ins in a day are all kept. The first time we see a day, drop any
+        # legacy single-per-day row (null samplePk) so it's replaced by the real
+        # per-sample readings.
+        cleared_dates = set()
         for m in measurements:
             cal_date = m.get("calendarDate")
             weight_g = m.get("weight")
             if not cal_date or weight_g is None:
                 continue
 
+            sample_pk = m.get("samplePk")
+            if sample_pk is None:
+                continue
+            sample_pk = str(sample_pk)
+
+            # Garmin's `date` is the weigh-in epoch (ms); fall back to the day.
+            epoch_ms = m.get("date")
+            measured_at = (
+                datetime.fromtimestamp(epoch_ms / 1000) if epoch_ms else datetime.fromisoformat(cal_date)
+            )
+
             muscle_g = m.get("muscleMass")
             bone_g = m.get("boneMass")
+
+            if cal_date not in cleared_dates:
+                cur.execute(
+                    "DELETE FROM body_composition "
+                    "WHERE user_id = %s AND date = %s AND garmin_sample_pk IS NULL",
+                    (user_id, cal_date),
+                )
+                cleared_dates.add(cal_date)
 
             cur.execute(
                 """
                 INSERT INTO body_composition
-                    (date, user_id, weight_kg, body_fat_pct, muscle_mass_kg,
-                     bone_mass_kg, body_water_pct, bmi)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (user_id, date) DO UPDATE SET
+                    (date, user_id, garmin_sample_pk, measured_at, weight_kg,
+                     body_fat_pct, muscle_mass_kg, bone_mass_kg, body_water_pct, bmi)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, garmin_sample_pk) DO UPDATE SET
+                    date           = EXCLUDED.date,
+                    measured_at    = EXCLUDED.measured_at,
                     weight_kg      = EXCLUDED.weight_kg,
                     body_fat_pct   = EXCLUDED.body_fat_pct,
                     muscle_mass_kg = EXCLUDED.muscle_mass_kg,
@@ -532,6 +558,8 @@ def sync_body_composition(garmin: garminconnect.Garmin, conn, days: int = 30, us
                 (
                     cal_date,
                     user_id,
+                    sample_pk,
+                    measured_at,
                     weight_g / 1000,
                     m.get("bodyFat"),
                     muscle_g / 1000 if muscle_g is not None else None,

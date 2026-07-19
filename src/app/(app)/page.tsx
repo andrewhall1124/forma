@@ -64,7 +64,7 @@ export default async function Dashboard() {
       .select()
       .from(bodyComposition)
       .where(eq(bodyComposition.userId, userId!))
-      .orderBy(desc(bodyComposition.date))
+      .orderBy(desc(bodyComposition.measuredAt), desc(bodyComposition.date))
       .limit(1)
       .catch(() => []),
   ]);
