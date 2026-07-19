@@ -151,6 +151,28 @@ export const meals = pgTable("meals", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Curated library of meals the user has saved from their log. Starts empty;
+// entries are snapshots so they survive deletion of the original logged meal.
+export const catalogMeals = pgTable(
+  "catalog_meals",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    name: text("name").notNull(),
+    mealType: text("meal_type"),
+    description: text("description"),
+    calories: real("calories"),
+    proteinG: real("protein_g"),
+    carbsG: real("carbs_g"),
+    fatG: real("fat_g"),
+    fiberG: real("fiber_g"),
+    ingredients: json("ingredients"),
+    note: text("note"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (t) => [unique().on(t.userId, t.name)],
+);
+
 export const waterLogs = pgTable("water_logs", {
   id: serial("id").primaryKey(),
   userId: text("user_id"),

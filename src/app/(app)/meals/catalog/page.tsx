@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search, Plus, Check } from "lucide-react";
+import { ArrowLeft, Search, Plus, Check, Trash2, BookOpen } from "lucide-react";
 import { localDateStr, relativeDayLabel } from "@/lib/date";
 
 type Ingredient = {
@@ -16,7 +16,6 @@ type Ingredient = {
 
 type Meal = {
   id: number;
-  date: string;
   mealType: string | null;
   name: string;
   description: string | null;
@@ -25,14 +24,15 @@ type Meal = {
   carbsG: number | null;
   fatG: number | null;
   fiberG: number | null;
-  servings: number | null;
   ingredients: Ingredient[] | null;
-  createdAt: string;
+  note?: string | null;
 };
 
 export default function CatalogPage() {
   const today = localDateStr();
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const [catalog, setCatalog] = useState<Meal[]>([]);
+  const [history, setHistory] = useState<Meal[]>([]);
+  const [mode, setMode] = useState<"catalog" | "add">("catalog");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [addedNames, setAddedNames] = useState<Set<string>>(new Set());
@@ -46,18 +46,25 @@ export default function CatalogPage() {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch("/api/meals?catalog=1");
-      setMeals(res.ok ? await res.json() : []);
+      const [cRes, hRes] = await Promise.all([
+        fetch("/api/meal-catalog"),
+        fetch("/api/meals?catalog=1"),
+      ]);
+      setCatalog(cRes.ok ? await cRes.json() : []);
+      setHistory(hRes.ok ? await hRes.json() : []);
       setLoading(false);
     })();
   }, []);
 
   const dayLabel = relativeDayLabel(date, today);
+  const catalogNames = new Set(catalog.map((m) => m.name));
 
-  const filtered = meals.filter((m) =>
+  const source = mode === "catalog" ? catalog : history;
+  const filtered = source.filter((m) =>
     m.name.toLowerCase().includes(query.trim().toLowerCase())
   );
 
+  // Log a catalog meal to the current day.
   async function addToDay(meal: Meal) {
     setAddedNames((prev) => new Set(prev).add(meal.name));
     await fetch("/api/meals", {
@@ -75,8 +82,39 @@ export default function CatalogPage() {
         fiberG: meal.fiberG,
         servings: 1,
         ingredients: meal.ingredients?.length ? meal.ingredients : null,
+        note: meal.note ?? null,
       }),
     });
+  }
+
+  // Save a previously-logged meal into the catalog.
+  async function addToCatalog(meal: Meal) {
+    if (catalogNames.has(meal.name)) return;
+    const res = await fetch("/api/meal-catalog", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mealType: meal.mealType,
+        name: meal.name,
+        description: meal.description,
+        calories: meal.calories,
+        proteinG: meal.proteinG,
+        carbsG: meal.carbsG,
+        fatG: meal.fatG,
+        fiberG: meal.fiberG,
+        ingredients: meal.ingredients?.length ? meal.ingredients : null,
+        note: meal.note ?? null,
+      }),
+    });
+    if (res.ok) {
+      const saved: Meal = await res.json();
+      setCatalog((prev) => [saved, ...prev.filter((m) => m.name !== saved.name)]);
+    }
+  }
+
+  async function removeFromCatalog(meal: Meal) {
+    setCatalog((prev) => prev.filter((m) => m.id !== meal.id));
+    await fetch(`/api/meal-catalog/${meal.id}`, { method: "DELETE" });
   }
 
   return (
@@ -94,13 +132,35 @@ export default function CatalogPage() {
         </div>
       </div>
 
+      {/* Browse the curated catalog, or add previously-logged meals to it. */}
+      <div className="flex gap-2 rounded-xl bg-neutral-900 border border-neutral-800 p-1">
+        <button
+          onClick={() => { setMode("catalog"); setQuery(""); }}
+          className={
+            "flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors " +
+            (mode === "catalog" ? "bg-neutral-800 text-white" : "text-neutral-400 hover:text-neutral-200")
+          }
+        >
+          <BookOpen size={15} /> Catalog
+        </button>
+        <button
+          onClick={() => { setMode("add"); setQuery(""); }}
+          className={
+            "flex-1 flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors " +
+            (mode === "add" ? "bg-neutral-800 text-white" : "text-neutral-400 hover:text-neutral-200")
+          }
+        >
+          <Plus size={15} /> Add from history
+        </button>
+      </div>
+
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search meals…"
+          placeholder={mode === "catalog" ? "Search catalog…" : "Search your logged meals…"}
           className="w-full rounded-xl bg-neutral-900 border border-neutral-800 pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-neutral-600"
         />
       </div>
@@ -108,13 +168,29 @@ export default function CatalogPage() {
       {loading ? (
         <p className="text-center text-neutral-500 text-sm py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-center text-neutral-500 text-sm py-12">
-          {meals.length === 0 ? "No meals logged yet" : "No meals match your search"}
-        </p>
+        <div className="text-center text-neutral-500 text-sm py-12 space-y-3">
+          {mode === "catalog" ? (
+            query ? (
+              <p>No catalog meals match your search</p>
+            ) : (
+              <>
+                <p>Your catalog is empty.</p>
+                <button
+                  onClick={() => setMode("add")}
+                  className="inline-flex items-center gap-2 rounded-full bg-accent-500 text-neutral-950 px-4 py-2 text-xs font-medium hover:bg-accent-400"
+                >
+                  <Plus size={14} /> Add from history
+                </button>
+              </>
+            )
+          ) : (
+            <p>{history.length === 0 ? "No meals logged yet" : "No meals match your search"}</p>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((meal) => {
-            const added = addedNames.has(meal.name);
+            const inCatalog = catalogNames.has(meal.name);
             return (
               <div
                 key={meal.id}
@@ -131,17 +207,41 @@ export default function CatalogPage() {
                     {meal.fatG != null && <span>F {Math.round(meal.fatG)}g</span>}
                   </div>
                 </div>
-                <button
-                  onClick={() => addToDay(meal)}
-                  disabled={added}
-                  className={
-                    added
-                      ? "flex items-center gap-1.5 rounded-full bg-green-600/20 text-green-400 px-3 py-2 text-xs font-medium shrink-0"
-                      : "flex items-center gap-1.5 rounded-full bg-accent-500 text-neutral-950 px-3 py-2 text-xs font-medium hover:bg-accent-400 active:bg-accent-600 shrink-0"
-                  }
-                >
-                  {added ? <><Check size={14} /> Added</> : <><Plus size={14} /> {dayLabel}</>}
-                </button>
+
+                {mode === "catalog" ? (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => addToDay(meal)}
+                      disabled={addedNames.has(meal.name)}
+                      className={
+                        addedNames.has(meal.name)
+                          ? "flex items-center gap-1.5 rounded-full bg-green-600/20 text-green-400 px-3 py-2 text-xs font-medium"
+                          : "flex items-center gap-1.5 rounded-full bg-accent-500 text-neutral-950 px-3 py-2 text-xs font-medium hover:bg-accent-400 active:bg-accent-600"
+                      }
+                    >
+                      {addedNames.has(meal.name) ? <><Check size={14} /> Added</> : <><Plus size={14} /> {dayLabel}</>}
+                    </button>
+                    <button
+                      onClick={() => removeFromCatalog(meal)}
+                      className="p-2 text-neutral-500 hover:text-red-400 transition-colors"
+                      aria-label="Remove from catalog"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => addToCatalog(meal)}
+                    disabled={inCatalog}
+                    className={
+                      inCatalog
+                        ? "flex items-center gap-1.5 rounded-full bg-green-600/20 text-green-400 px-3 py-2 text-xs font-medium shrink-0"
+                        : "flex items-center gap-1.5 rounded-full bg-accent-500 text-neutral-950 px-3 py-2 text-xs font-medium hover:bg-accent-400 active:bg-accent-600 shrink-0"
+                    }
+                  >
+                    {inCatalog ? <><Check size={14} /> In catalog</> : <><Plus size={14} /> Add</>}
+                  </button>
+                )}
               </div>
             );
           })}
