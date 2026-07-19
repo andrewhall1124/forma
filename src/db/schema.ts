@@ -146,6 +146,7 @@ export const meals = pgTable("meals", {
   fiberG: real("fiber_g"),
   servings: real("servings").default(1),
   ingredients: json("ingredients"),
+  note: text("note"),
   openFoodFactsId: text("open_food_facts_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });

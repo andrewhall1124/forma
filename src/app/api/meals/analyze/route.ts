@@ -26,8 +26,20 @@ const RESPONSE_SCHEMA = `Return ONLY a valid JSON object with exactly these fiel
 }
 List every distinct ingredient or component. Ingredient calories/macros should sum to approximately the totals. Be realistic and accurate.`;
 
+type ImageInput = { data: string; mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" };
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
+
+  // Accept a list of images (new) or a single legacy {image, mediaType} pair.
+  const images: ImageInput[] = Array.isArray(body.images)
+    ? body.images
+    : body.image
+    ? [{ data: body.image, mediaType: body.mediaType }]
+    : [];
+
+  const note: string = typeof body.note === "string" ? body.note.trim() : "";
+  const noteLine = note ? `\n\nThe user added this note about the meal — use it to refine your estimate: "${note}"` : "";
 
   const content: Anthropic.MessageParam["content"] = body.text
     ? [
@@ -35,22 +47,20 @@ export async function POST(req: NextRequest) {
           type: "text",
           text: `The user described their meal as: "${body.text}"
 
-Estimate the nutritional content of this meal based on the description.
+Estimate the nutritional content of this meal based on the description.${noteLine}
 ${RESPONSE_SCHEMA}`,
         },
       ]
     : [
-        {
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: body.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
-            data: body.image,
-          },
-        },
+        ...images.map(
+          (img): Anthropic.ImageBlockParam => ({
+            type: "image",
+            source: { type: "base64", media_type: img.mediaType, data: img.data },
+          })
+        ),
         {
           type: "text",
-          text: `Analyze this meal photo and estimate its nutritional content.
+          text: `Analyze ${images.length > 1 ? "these meal photos (all showing the same meal, e.g. different angles or the nutrition label)" : "this meal photo"} and estimate the nutritional content.${noteLine}
 ${RESPONSE_SCHEMA}`,
         },
       ];

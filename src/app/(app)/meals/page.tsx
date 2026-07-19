@@ -35,8 +35,18 @@ type Meal = {
   fiberG: number | null;
   servings: number | null;
   ingredients: Ingredient[] | null;
+  note: string | null;
   createdAt: string;
 };
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => resolve(ev.target?.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 type Analysis = {
   name: string;
@@ -97,7 +107,8 @@ export default function MealsPage() {
   const [inputMode, setInputMode] = useState<"photo" | "text">("photo");
   const [textInput, setTextInput] = useState("");
   const [step, setStep] = useState<"photo" | "analyzing" | "confirm">("photo");
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [note, setNote] = useState("");
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [mealType, setMealType] = useState<string>("lunch");
   const [servings, setServings] = useState(1);
@@ -181,6 +192,7 @@ export default function MealsPage() {
     });
     setMealType(meal.mealType ?? "snack");
     setServings(meal.servings ?? 1);
+    setNote(meal.note ?? "");
     setStep("confirm");
     setIsOpen(true);
   }
@@ -206,42 +218,42 @@ export default function MealsPage() {
     });
     setMealType(meal.mealType ?? "snack");
     setServings(1);
+    setNote("");
     setStep("confirm");
   }
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
     setError(null);
 
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const dataUrl = ev.target?.result as string;
-      setPreview(dataUrl);
-      setStep("analyzing");
+    const dataUrls = await Promise.all(files.map(readFileAsDataURL));
+    setPreviews(dataUrls);
+    setStep("analyzing");
 
+    const images = dataUrls.map((dataUrl) => {
       const [header, data] = dataUrl.split(",");
       const mediaType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+      return { data, mediaType };
+    });
 
-      try {
-        const res = await fetch("/api/meals/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: data, mediaType }),
-        });
-        if (!res.ok) throw new Error("Analysis failed");
-        const result: Analysis = await res.json();
-        setAnalysis(result);
-        setMealType(result.mealType || "lunch");
-        setServings(1);
-        setStep("confirm");
-      } catch {
-        setError("Couldn't analyze the photo. Please try again.");
-        setStep("photo");
-        setPreview(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const res = await fetch("/api/meals/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images, note: note.trim() || undefined }),
+      });
+      if (!res.ok) throw new Error("Analysis failed");
+      const result: Analysis = await res.json();
+      setAnalysis(result);
+      setMealType(result.mealType || "lunch");
+      setServings(1);
+      setStep("confirm");
+    } catch {
+      setError("Couldn't analyze the photo. Please try again.");
+      setStep("photo");
+      setPreviews([]);
+    }
   }
 
   async function handleText() {
@@ -252,7 +264,7 @@ export default function MealsPage() {
       const res = await fetch("/api/meals/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: textInput.trim() }),
+        body: JSON.stringify({ text: textInput.trim(), note: note.trim() || undefined }),
       });
       if (!res.ok) throw new Error("Analysis failed");
       const result: Analysis = await res.json();
@@ -280,6 +292,7 @@ export default function MealsPage() {
         fatG: analysis.fatG,
         fiberG: analysis.fiberG,
         servings,
+        note: note.trim() || null,
         // Bake each ingredient's quantity multiplier into its macros + amount
         // label so the stored shape stays {name, amount, ...macros} with no qty.
         ingredients: analysis.ingredients?.length
@@ -326,7 +339,8 @@ export default function MealsPage() {
     setInputMode("photo");
     setTextInput("");
     setStep("photo");
-    setPreview(null);
+    setPreviews([]);
+    setNote("");
     setAnalysis(null);
     setError(null);
     setServings(1);
@@ -510,6 +524,9 @@ export default function MealsPage() {
                       </span>
                     )}
                   </div>
+                  {meal.note && (
+                    <p className="text-xs text-neutral-500 italic mt-1.5 line-clamp-2">{meal.note}</p>
+                  )}
                 </div>
 
                 {/* Ingredient breakdown */}
@@ -611,14 +628,23 @@ export default function MealsPage() {
                         className="w-full flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-neutral-700 p-10 text-neutral-400 hover:border-neutral-500 hover:text-neutral-200 transition-colors"
                       >
                         <Camera size={32} />
-                        <span className="text-sm">Take a photo or choose from library</span>
+                        <span className="text-sm">Take photos or choose from library</span>
+                        <span className="text-xs text-neutral-500">Add several angles or a nutrition label</span>
                       </button>
                       <input
                         ref={fileRef}
                         type="file"
                         accept="image/*"
+                        multiple
                         className="hidden"
                         onChange={handleFile}
+                      />
+                      <textarea
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="Add a note (optional) — e.g. extra olive oil, restaurant portion"
+                        rows={2}
+                        className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-neutral-500 resize-none"
                       />
                     </>
                   ) : (
@@ -665,8 +691,20 @@ export default function MealsPage() {
 
               {step === "analyzing" && (
                 <div className="flex flex-col items-center gap-4 py-8">
-                  {preview && (
-                    <img src={preview} alt="meal preview" className="w-48 h-48 object-cover rounded-xl" />
+                  {previews.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {previews.map((src, i) => (
+                        <img
+                          key={i}
+                          src={src}
+                          alt={`meal preview ${i + 1}`}
+                          className={cn(
+                            "object-cover rounded-xl",
+                            previews.length === 1 ? "w-48 h-48" : "w-24 h-24"
+                          )}
+                        />
+                      ))}
+                    </div>
                   )}
                   <div className="flex items-center gap-2 text-neutral-400">
                     <div className="w-4 h-4 border-2 border-neutral-600 border-t-white rounded-full animate-spin" />
@@ -677,26 +715,37 @@ export default function MealsPage() {
 
               {step === "confirm" && analysis && (
                 <>
-                  {preview ? (
-                    <div className="flex gap-3">
-                      <img
-                        src={preview}
-                        alt="meal preview"
-                        className="w-16 h-16 object-cover rounded-lg shrink-0"
-                      />
-                      <div>
-                        <p className="font-semibold">{analysis.name}</p>
-                        <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">{analysis.description}</p>
+                  <div className="space-y-2">
+                    {previews.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto">
+                        {previews.map((src, i) => (
+                          <img
+                            key={i}
+                            src={src}
+                            alt={`meal preview ${i + 1}`}
+                            className="w-16 h-16 object-cover rounded-lg shrink-0"
+                          />
+                        ))}
                       </div>
-                    </div>
-                  ) : (
+                    )}
                     <div>
                       <p className="font-semibold">{analysis.name}</p>
                       {analysis.description && (
-                        <p className="text-xs text-neutral-400 mt-0.5">{analysis.description}</p>
+                        <p className="text-xs text-neutral-400 mt-0.5 leading-relaxed">{analysis.description}</p>
                       )}
                     </div>
-                  )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-neutral-500 uppercase tracking-wide">Note</p>
+                    <textarea
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      placeholder="Add a note (optional)"
+                      rows={2}
+                      className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-neutral-500 resize-none"
+                    />
+                  </div>
 
                   <div className="flex items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3">
                     <span className="text-sm flex-1">Servings</span>
@@ -815,7 +864,7 @@ export default function MealsPage() {
                       <button
                         onClick={() => {
                           setStep("photo");
-                          setPreview(null);
+                          setPreviews([]);
                           setAnalysis(null);
                           setServings(1);
                           if (fileRef.current) fileRef.current.value = "";
