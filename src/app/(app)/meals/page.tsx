@@ -48,6 +48,37 @@ function readFileAsDataURL(file: File): Promise<string> {
   });
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image load failed"));
+    img.src = src;
+  });
+}
+
+// Downscale + re-encode as JPEG before upload. Full-res phone photos base64 to
+// well over Next's 10MB body limit, and Anthropic's vision models don't benefit
+// from anything past ~1568px on the long edge. Falls back to the raw data URL.
+async function fileToImageData(file: File, maxDim = 1568, quality = 0.8): Promise<string> {
+  const dataUrl = await readFileAsDataURL(file);
+  try {
+    const img = await loadImage(dataUrl);
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", quality);
+  } catch {
+    return dataUrl;
+  }
+}
+
 type Analysis = {
   name: string;
   mealType: string;
@@ -227,7 +258,7 @@ export default function MealsPage() {
     if (!files.length) return;
     setError(null);
 
-    const dataUrls = await Promise.all(files.map(readFileAsDataURL));
+    const dataUrls = await Promise.all(files.map((f) => fileToImageData(f)));
     setPreviews(dataUrls);
     setStep("analyzing");
 
