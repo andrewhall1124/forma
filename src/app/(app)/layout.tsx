@@ -1,6 +1,7 @@
 import { UserButton } from "@clerk/nextjs";
 import { Logo } from "@/components/logo";
 import CoachModeBanner from "@/components/coach-mode-banner";
+import ContentWidth from "@/components/content-width";
 import MobileNav from "@/components/mobile-nav";
 import SideNav from "@/components/side-nav";
 import SyncButton from "@/components/sync-button";
@@ -27,9 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         <main className="flex-1 flex flex-col">
-          <div className="flex-1 flex flex-col w-full md:max-w-4xl md:mx-auto">
-            {children}
-          </div>
+          <ContentWidth>{children}</ContentWidth>
         </main>
       </div>
     </div>
