@@ -626,12 +626,16 @@ export default function PlanPage() {
 
   // A compact, coloured workout card — used inside week-grid cells and in the
   // mobile day detail. Clicking opens the detail modal; dragging reschedules.
-  function WorkoutChip({ w }: { w: PlannedWorkout }) {
+  // Rendered by calling this function inline (not as <WorkoutChip/>): a nested
+  // component would get a new identity on every parent render and remount its
+  // DOM node, which aborts an in-progress native drag.
+  function workoutChip(w: PlannedWorkout) {
     const { icon: Icon } = PLAN_TYPE_META[w.activityType ?? "other"] ?? PLAN_TYPE_META.other;
     const style = sportStyle(w.activityType);
     const skipped = w.status === "skipped";
     return (
       <button
+        key={w.id}
         draggable
         onDragStart={(e) => {
           setDragId(w.id);
@@ -823,15 +827,19 @@ export default function PlanPage() {
                 <div
                   key={date}
                   onDragOver={(e) => {
-                    if (dragId === null) return;
+                    // Must preventDefault unconditionally, or the browser treats
+                    // this as a non-droppable target and the drop never fires.
                     e.preventDefault();
                     e.dataTransfer.dropEffect = "move";
-                    setDragOverDate(date);
+                    if (dragOverDate !== date) setDragOverDate(date);
                   }}
                   onDragLeave={() => setDragOverDate((d) => (d === date ? null : d))}
                   onDrop={(e) => {
                     e.preventDefault();
-                    const w = workouts.find((x) => x.id === dragId);
+                    // Read the id from the drag payload rather than React state,
+                    // which is unreliable to read back mid-drag.
+                    const id = Number(e.dataTransfer.getData("text/plain"));
+                    const w = workouts.find((x) => x.id === id);
                     if (w) moveWorkout(w, date);
                     setDragOverDate(null);
                     setDragId(null);
@@ -857,9 +865,7 @@ export default function PlanPage() {
                   <div className="flex-1 space-y-1">
                     {dayRaceChips(date)}
                     {dayNoteChips(date)}
-                    {dayWorkouts(date).map((w) => (
-                      <WorkoutChip key={w.id} w={w} />
-                    ))}
+                    {dayWorkouts(date).map((w) => workoutChip(w))}
                   </div>
                   <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
@@ -968,9 +974,7 @@ export default function PlanPage() {
               <div className="space-y-2">
                 {dayRaceChips(selectedDate)}
                 {dayNoteChips(selectedDate)}
-                {dayWorkouts(selectedDate).map((w) => (
-                  <WorkoutChip key={w.id} w={w} />
-                ))}
+                {dayWorkouts(selectedDate).map((w) => workoutChip(w))}
                 {dayWorkouts(selectedDate).length === 0 &&
                   notes.filter((n) => n.date === selectedDate).length === 0 &&
                   races.filter((r) => r.date === selectedDate).length === 0 && (
