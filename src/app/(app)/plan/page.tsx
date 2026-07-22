@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   BookmarkCheck,
   BookmarkPlus,
+  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -222,9 +223,9 @@ export default function PlanPage() {
   // The workout whose detail modal is open, and a single-workout copy buffer.
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [clipboard, setClipboard] = useState<PlannedWorkout | null>(null);
-  // Drag-to-reschedule state (desktop grid).
-  const [dragId, setDragId] = useState<number | null>(null);
-  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  // The workout being rescheduled (its detail modal shows a date picker) and
+  // the pending new date.
+  const [reschedule, setReschedule] = useState<{ id: number; date: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
   const [noteForm, setNoteForm] = useState<NoteForm | null>(null);
@@ -278,6 +279,11 @@ export default function PlanPage() {
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
+
+  // Reset the reschedule picker whenever the open workout changes or closes.
+  useEffect(() => {
+    setReschedule(null);
+  }, [expandedId]);
 
   const viewingSelf = coachMode === null;
 
@@ -468,16 +474,25 @@ export default function PlanPage() {
     await loadPlan();
   }
 
-  // Drag a card onto another day — optimistic move, then persist the new date.
-  async function moveWorkout(w: PlannedWorkout, date: string) {
-    if (w.date === date) return;
-    setWorkouts((ws) => ws.map((x) => (x.id === w.id ? { ...x, date } : x)));
-    await fetch(`/api/planned-workouts/${w.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date }),
-    });
-    await loadPlan();
+  // Move a workout to a new date (from the reschedule picker in its modal).
+  async function rescheduleWorkout(w: PlannedWorkout, date: string) {
+    if (!date || date === w.date) {
+      setReschedule(null);
+      return;
+    }
+    setInlineSaving(true);
+    try {
+      setWorkouts((ws) => ws.map((x) => (x.id === w.id ? { ...x, date } : x)));
+      await fetch(`/api/planned-workouts/${w.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date }),
+      });
+      setReschedule(null);
+      await loadPlan();
+    } finally {
+      setInlineSaving(false);
+    }
   }
 
   function copyWorkout(w: PlannedWorkout) {
@@ -625,10 +640,7 @@ export default function PlanPage() {
   }
 
   // A compact, coloured workout card — used inside week-grid cells and in the
-  // mobile day detail. Clicking opens the detail modal; dragging reschedules.
-  // Rendered by calling this function inline (not as <WorkoutChip/>): a nested
-  // component would get a new identity on every parent render and remount its
-  // DOM node, which aborts an in-progress native drag.
+  // mobile day detail. Clicking opens the detail modal.
   function workoutChip(w: PlannedWorkout) {
     const { icon: Icon } = PLAN_TYPE_META[w.activityType ?? "other"] ?? PLAN_TYPE_META.other;
     const style = sportStyle(w.activityType);
@@ -636,26 +648,14 @@ export default function PlanPage() {
     return (
       <button
         key={w.id}
-        draggable
-        onDragStart={(e) => {
-          setDragId(w.id);
-          // Firefox/Safari won't start a drag unless dataTransfer is set.
-          e.dataTransfer.setData("text/plain", String(w.id));
-          e.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => {
-          setDragId(null);
-          setDragOverDate(null);
-        }}
         onClick={() => setExpandedId(w.id)}
         className={cn(
-          "group w-full rounded-lg border px-2 py-1.5 text-left transition-colors cursor-grab active:cursor-grabbing",
+          "group w-full rounded-lg border px-2 py-1.5 text-left transition-colors cursor-pointer",
           skipped
             ? "border-neutral-800 bg-neutral-900 opacity-60"
             : w.status === "completed"
             ? style.completed
             : style.planned,
-          dragId === w.id && "opacity-40",
         )}
       >
         <div className="flex items-center gap-1.5">
@@ -826,30 +826,7 @@ export default function PlanPage() {
               return (
                 <div
                   key={date}
-                  onDragOver={(e) => {
-                    // Must preventDefault unconditionally, or the browser treats
-                    // this as a non-droppable target and the drop never fires.
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    if (dragOverDate !== date) setDragOverDate(date);
-                  }}
-                  onDragLeave={() => setDragOverDate((d) => (d === date ? null : d))}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    // Read the id from the drag payload rather than React state,
-                    // which is unreliable to read back mid-drag.
-                    const id = Number(e.dataTransfer.getData("text/plain"));
-                    const w = workouts.find((x) => x.id === id);
-                    if (w) moveWorkout(w, date);
-                    setDragOverDate(null);
-                    setDragId(null);
-                  }}
-                  className={cn(
-                    "group flex min-h-[10rem] flex-col rounded-xl border p-1.5 transition-colors",
-                    dragOverDate === date
-                      ? "border-accent-500 bg-accent-500/5"
-                      : "border-neutral-800 bg-neutral-900/40",
-                  )}
+                  className="group flex min-h-[10rem] flex-col rounded-xl border border-neutral-800 bg-neutral-900/40 p-1.5"
                 >
                   <div className="mb-1.5 flex items-center justify-between px-1">
                     <span className="text-[11px] font-medium text-neutral-500">{dow}</span>
@@ -1195,6 +1172,52 @@ export default function PlanPage() {
                     </div>
                   )}
 
+                  {/* Reschedule picker */}
+                  {reschedule?.id === w.id && (
+                    <div className="space-y-2 rounded-lg border border-accent-500/30 bg-accent-500/5 p-2.5">
+                      <p className="flex items-center gap-1 text-xs font-medium text-accent-400">
+                        <CalendarDays size={13} /> Reschedule
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { label: "−1 day", days: -1 },
+                          { label: "+1 day", days: 1 },
+                          { label: "+1 week", days: 7 },
+                        ].map((o) => (
+                          <button
+                            key={o.label}
+                            onClick={() => rescheduleWorkout(w, addDays(w.date, o.days))}
+                            disabled={inlineSaving}
+                            className="rounded-full border border-neutral-700 px-2.5 py-1 text-xs text-neutral-300 hover:border-accent-500/60 hover:text-accent-400 disabled:opacity-50 transition-colors"
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="date"
+                          value={reschedule.date}
+                          onChange={(e) => setReschedule({ id: w.id, date: e.target.value })}
+                          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs outline-none focus:border-neutral-500"
+                        />
+                        <button
+                          onClick={() => rescheduleWorkout(w, reschedule.date)}
+                          disabled={inlineSaving || reschedule.date === w.date}
+                          className="flex items-center gap-1 rounded-lg bg-accent-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:bg-accent-400 disabled:opacity-50"
+                        >
+                          {inlineSaving && <Loader2 size={12} className="animate-spin" />} Move
+                        </button>
+                        <button
+                          onClick={() => setReschedule(null)}
+                          className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Status actions */}
                   {viewingSelf && w.activityType !== "rest" && (
                     <div className="flex gap-2">
@@ -1225,6 +1248,19 @@ export default function PlanPage() {
 
                   {/* Card tools */}
                   <div className="flex items-center gap-1 border-t border-neutral-800 pt-3">
+                    <button
+                      onClick={() =>
+                        setReschedule((r) => (r?.id === w.id ? null : { id: w.id, date: w.date }))
+                      }
+                      className={cn(
+                        "flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-neutral-800",
+                        reschedule?.id === w.id
+                          ? "text-accent-400"
+                          : "text-neutral-400 hover:text-accent-400",
+                      )}
+                    >
+                      <CalendarDays size={13} /> Reschedule
+                    </button>
                     <button
                       onClick={() => copyWorkout(w)}
                       className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-accent-400 transition-colors"
