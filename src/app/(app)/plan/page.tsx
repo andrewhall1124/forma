@@ -633,14 +633,19 @@ export default function PlanPage() {
     return (
       <button
         draggable
-        onDragStart={() => setDragId(w.id)}
+        onDragStart={(e) => {
+          setDragId(w.id);
+          // Firefox/Safari won't start a drag unless dataTransfer is set.
+          e.dataTransfer.setData("text/plain", String(w.id));
+          e.dataTransfer.effectAllowed = "move";
+        }}
         onDragEnd={() => {
           setDragId(null);
           setDragOverDate(null);
         }}
         onClick={() => setExpandedId(w.id)}
         className={cn(
-          "group w-full rounded-lg border px-2 py-1.5 text-left transition-colors cursor-pointer",
+          "group w-full rounded-lg border px-2 py-1.5 text-left transition-colors cursor-grab active:cursor-grabbing",
           skipped
             ? "border-neutral-800 bg-neutral-900 opacity-60"
             : w.status === "completed"
@@ -818,7 +823,9 @@ export default function PlanPage() {
                 <div
                   key={date}
                   onDragOver={(e) => {
+                    if (dragId === null) return;
                     e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
                     setDragOverDate(date);
                   }}
                   onDragLeave={() => setDragOverDate((d) => (d === date ? null : d))}
