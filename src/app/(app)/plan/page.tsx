@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   BookmarkCheck,
   BookmarkPlus,
   Check,
-  ChevronUp,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Flag,
   LibraryBig,
@@ -170,29 +170,6 @@ function weekRangeLabel(weekStart: string): string {
   return `${monthDay(weekStart)} – ${monthDay(addDays(weekStart, 6))}`;
 }
 
-function weekdayAbbrev(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return WEEKDAYS[(dow + 6) % 7];
-}
-
-function monthAbbrev(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
-    month: "short",
-    timeZone: "UTC",
-  });
-}
-
-function monthName(dateStr: string): string {
-  const [y, m] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 // Whole days from today to a future date, or null if it's in the past.
 function daysUntil(dateStr: string, today: string): number | null {
   const diff = Math.round(
@@ -236,14 +213,8 @@ export default function PlanPage() {
   // the API resolves it server-side, so requests need no athlete param.
   const coachMode = useCoachMode();
   const today = localDateStr();
-  // The calendar renders a continuous, scrollable range of whole weeks around
-  // today; the window can be extended in either direction on demand.
-  const anchorMonday = mondayOf(today);
-  const [weeksBefore, setWeeksBefore] = useState(4);
-  const [weeksAfter, setWeeksAfter] = useState(12);
-  const todayRef = useRef<HTMLDivElement | null>(null);
-  const mobileTodayRef = useRef<HTMLDivElement | null>(null);
-  const didInitialScroll = useRef(false);
+  const [weekStart, setWeekStart] = useState(() => mondayOf(today));
+  const [selectedDate, setSelectedDate] = useState(today);
   const [workouts, setWorkouts] = useState<PlannedWorkout[]>([]);
   const [rangeActivities, setRangeActivities] = useState<ActivitySummary[]>([]);
   const [notes, setNotes] = useState<PlanNote[]>([]);
@@ -269,10 +240,8 @@ export default function PlanPage() {
   // null = catalog picker closed; otherwise the active filter.
   const [catalogFilter, setCatalogFilter] = useState<string | null>(null);
 
-  const gridStart = addDays(anchorMonday, -weeksBefore * 7);
-  const totalWeeks = weeksBefore + weeksAfter + 1;
-  const weekStarts = Array.from({ length: totalWeeks }, (_, i) => addDays(gridStart, i * 7));
-  const gridEnd = addDays(gridStart, totalWeeks * 7 - 1);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekEnd = weekDays[6];
 
   const loadTemplates = useCallback(async () => {
     const res = await fetch("/api/workout-templates");
@@ -292,7 +261,7 @@ export default function PlanPage() {
   const loadPlan = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ start: gridStart, end: gridEnd });
+      const params = new URLSearchParams({ start: weekStart, end: weekEnd });
       const [pwRes, notesRes] = await Promise.all([
         fetch(`/api/planned-workouts?${params}`),
         fetch(`/api/plan-notes?${params}`),
@@ -304,41 +273,30 @@ export default function PlanPage() {
     } finally {
       setLoading(false);
     }
-  }, [gridStart, gridEnd]);
+  }, [weekStart, weekEnd]);
 
   useEffect(() => {
     loadPlan();
   }, [loadPlan]);
 
-  // Center on today once, after the first load renders the grid. Whichever of
-  // the two layouts is hidden has no layout box, so its scroll is a no-op.
-  useEffect(() => {
-    if (loading || didInitialScroll.current) return;
-    todayRef.current?.scrollIntoView({ block: "center" });
-    mobileTodayRef.current?.scrollIntoView({ block: "center" });
-    didInitialScroll.current = true;
-  }, [loading]);
-
   const viewingSelf = coachMode === null;
-
-  function scrollToToday() {
-    todayRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-    mobileTodayRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }
-
-  function monthDividerLabel(i: number): string | null {
-    // Group by the week's Thursday so a month that starts mid-week lands on the
-    // week where most of its days fall.
-    const rep = addDays(weekStarts[i], 3);
-    if (i === 0) return monthName(rep);
-    return rep.slice(0, 7) !== addDays(weekStarts[i - 1], 3).slice(0, 7)
-      ? monthName(rep)
-      : null;
-  }
 
   const upcomingRaces = races
     .filter((r) => r.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  function goToWeek(delta: number) {
+    const next = addDays(weekStart, delta * 7);
+    setWeekStart(next);
+    setSelectedDate(next);
+    setExpandedId(null);
+  }
+
+  function goToToday() {
+    setWeekStart(mondayOf(today));
+    setSelectedDate(today);
+    setExpandedId(null);
+  }
 
   function openCreate(date: string) {
     setForm({
@@ -754,142 +712,6 @@ export default function PlanPage() {
 
   const dayWorkouts = (date: string) => workouts.filter((w) => w.date === date);
 
-  // One day cell of the desktop week grid: a drop target for drag-reschedule,
-  // stacking its race/note/workout chips with add + paste affordances.
-  function renderDayCell(date: string) {
-    const isToday = date === today;
-    const dnum = Number(date.slice(8, 10));
-    return (
-      <div
-        key={date}
-        ref={isToday ? todayRef : undefined}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOverDate(date);
-        }}
-        onDragLeave={() => setDragOverDate((d) => (d === date ? null : d))}
-        onDrop={(e) => {
-          e.preventDefault();
-          const w = workouts.find((x) => x.id === dragId);
-          if (w) moveWorkout(w, date);
-          setDragOverDate(null);
-          setDragId(null);
-        }}
-        className={cn(
-          "group flex min-h-[9rem] flex-col rounded-xl border p-1.5 transition-colors",
-          dragOverDate === date
-            ? "border-accent-500 bg-accent-500/5"
-            : isToday
-            ? "border-accent-500/40 bg-accent-500/[0.04]"
-            : "border-neutral-800 bg-neutral-900/40",
-        )}
-      >
-        <div className="mb-1.5 flex items-center justify-between px-1">
-          <span className="text-[11px] font-medium uppercase text-neutral-500">
-            {dnum === 1 ? monthAbbrev(date) : ""}
-          </span>
-          <span
-            className={cn(
-              "flex h-6 min-w-[1.5rem] items-center justify-center rounded-full px-1.5 text-xs tabular-nums",
-              isToday ? "bg-accent-500 font-bold text-neutral-950" : "text-neutral-300",
-            )}
-          >
-            {dnum}
-          </span>
-        </div>
-        <div className="flex-1 space-y-1">
-          {dayRaceChips(date)}
-          {dayNoteChips(date)}
-          {dayWorkouts(date).map((w) => (
-            <WorkoutChip key={w.id} w={w} />
-          ))}
-        </div>
-        <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            onClick={() => openCreate(date)}
-            className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-700 py-1 text-[11px] text-neutral-500 hover:border-accent-500/60 hover:text-accent-400 transition-colors"
-          >
-            <Plus size={11} /> Add
-          </button>
-          {clipboard && (
-            <button
-              onClick={() => pasteWorkout(date)}
-              className="flex items-center justify-center gap-1 rounded-lg border border-dashed border-accent-500/50 px-2 py-1 text-[11px] text-accent-400 hover:bg-accent-500/10 transition-colors"
-              title={`Paste "${clipboard.title}"`}
-            >
-              <Copy size={11} /> Paste
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // One day of the mobile agenda: a compact row with its cards and inline
-  // add / note / paste actions. Empty days collapse to a "Rest" line.
-  function renderMobileDay(date: string) {
-    const isToday = date === today;
-    const dnum = Number(date.slice(8, 10));
-    const dW = dayWorkouts(date);
-    const dR = races.filter((r) => r.date === date);
-    const dN = notes.filter((n) => n.date === date);
-    const empty = dW.length === 0 && dR.length === 0 && dN.length === 0;
-    return (
-      <div
-        key={date}
-        ref={isToday ? mobileTodayRef : undefined}
-        className={cn(
-          "rounded-xl border p-2",
-          isToday ? "border-accent-500/50 bg-accent-500/5" : "border-neutral-800/70 bg-neutral-900/30",
-        )}
-      >
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className={cn("text-xs font-medium", isToday ? "text-accent-400" : "text-neutral-300")}>
-            {weekdayAbbrev(date)} {dnum === 1 ? `· ${monthAbbrev(date)} ` : ""}
-            {dnum}
-            {isToday && " · Today"}
-          </p>
-          <div className="flex items-center gap-3">
-            {clipboard && (
-              <button
-                onClick={() => pasteWorkout(date)}
-                className="text-accent-400 hover:text-accent-300"
-                aria-label="Paste workout"
-              >
-                <Copy size={13} />
-              </button>
-            )}
-            <button
-              onClick={() => setNoteForm({ id: null, date, title: "", body: "" })}
-              className="text-neutral-500 hover:text-accent-400"
-              aria-label="Add note"
-            >
-              <StickyNote size={13} />
-            </button>
-            <button
-              onClick={() => openCreate(date)}
-              className="text-neutral-500 hover:text-accent-400"
-              aria-label="Add workout"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-        </div>
-        {empty ? (
-          <p className="px-1 pb-0.5 text-[11px] text-neutral-600">Rest</p>
-        ) : (
-          <div className="space-y-1">
-            {dayRaceChips(date)}
-            {dayNoteChips(date)}
-            {dW.map((w) => (
-              <WorkoutChip key={w.id} w={w} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 p-4 space-y-4 md:max-w-none max-w-2xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -954,17 +776,31 @@ export default function PlanPage() {
         )}
       </div>
 
-      {/* Controls */}
+      {/* Week navigator */}
       <div className="flex items-center justify-between border-t border-neutral-800 pt-3">
-        <button
-          onClick={scrollToToday}
-          className="rounded-lg border border-neutral-800 px-3 py-2 text-xs font-medium hover:bg-neutral-800 transition-colors"
-        >
-          Today
-        </button>
-        <p className="text-sm font-medium tabular-nums text-neutral-400">
-          {monthDay(gridStart)} – {monthDay(gridEnd)}
-        </p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => goToWeek(-1)}
+            className="rounded-lg border border-neutral-800 p-2 hover:bg-neutral-800 transition-colors"
+            aria-label="Previous week"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            onClick={() => goToWeek(1)}
+            className="rounded-lg border border-neutral-800 p-2 hover:bg-neutral-800 transition-colors"
+            aria-label="Next week"
+          >
+            <ChevronRight size={16} />
+          </button>
+          <button
+            onClick={goToToday}
+            className="rounded-lg border border-neutral-800 px-3 py-2 text-xs font-medium hover:bg-neutral-800 transition-colors"
+          >
+            Today
+          </button>
+        </div>
+        <p className="text-sm font-medium tabular-nums">{weekRangeLabel(weekStart)}</p>
       </div>
 
       {loading ? (
@@ -973,72 +809,168 @@ export default function PlanPage() {
         </div>
       ) : (
         <>
-          {/* Desktop: continuously scrolling stack of week rows. */}
-          <div className="hidden md:block space-y-2">
-            <div className="sticky top-0 z-10 grid grid-cols-7 gap-2 bg-neutral-950/95 py-2 backdrop-blur">
-              {WEEKDAYS.map((d) => (
-                <div key={d} className="text-center text-[11px] font-medium text-neutral-500">
-                  {d}
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setWeeksBefore((n) => n + 8)}
-              className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-800 py-2 text-xs text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 transition-colors"
-            >
-              <ChevronUp size={13} /> Load earlier weeks
-            </button>
-            {weekStarts.map((ws, i) => {
-              const days = Array.from({ length: 7 }, (_, k) => addDays(ws, k));
-              const divider = monthDividerLabel(i);
+          {/* Desktop: 7-column week grid with cards inside each day cell. */}
+          <div className="hidden md:grid grid-cols-7 gap-2">
+            {weekDays.map((date) => {
+              const isToday = date === today;
+              const dow = WEEKDAYS[weekDays.indexOf(date)];
               return (
-                <div key={ws} className="space-y-2">
-                  {divider && (
-                    <p className="pt-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                      {divider}
-                    </p>
+                <div
+                  key={date}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverDate(date);
+                  }}
+                  onDragLeave={() => setDragOverDate((d) => (d === date ? null : d))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const w = workouts.find((x) => x.id === dragId);
+                    if (w) moveWorkout(w, date);
+                    setDragOverDate(null);
+                    setDragId(null);
+                  }}
+                  className={cn(
+                    "group flex min-h-[10rem] flex-col rounded-xl border p-1.5 transition-colors",
+                    dragOverDate === date
+                      ? "border-accent-500 bg-accent-500/5"
+                      : "border-neutral-800 bg-neutral-900/40",
                   )}
-                  <div className="grid grid-cols-7 gap-2">{days.map((d) => renderDayCell(d))}</div>
+                >
+                  <div className="mb-1.5 flex items-center justify-between px-1">
+                    <span className="text-[11px] font-medium text-neutral-500">{dow}</span>
+                    <span
+                      className={cn(
+                        "flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums",
+                        isToday ? "bg-accent-500 font-bold text-neutral-950" : "text-neutral-300",
+                      )}
+                    >
+                      {Number(date.slice(8, 10))}
+                    </span>
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    {dayRaceChips(date)}
+                    {dayNoteChips(date)}
+                    {dayWorkouts(date).map((w) => (
+                      <WorkoutChip key={w.id} w={w} />
+                    ))}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      onClick={() => openCreate(date)}
+                      className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-700 py-1 text-[11px] text-neutral-500 hover:border-accent-500/60 hover:text-accent-400 transition-colors"
+                    >
+                      <Plus size={11} /> Add
+                    </button>
+                    {clipboard && (
+                      <button
+                        onClick={() => pasteWorkout(date)}
+                        className="flex items-center justify-center gap-1 rounded-lg border border-dashed border-accent-500/50 px-2 py-1 text-[11px] text-accent-400 hover:bg-accent-500/10 transition-colors"
+                        title={`Paste "${clipboard.title}"`}
+                      >
+                        <Copy size={11} /> Paste
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
-            <button
-              onClick={() => setWeeksAfter((n) => n + 8)}
-              className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-800 py-2 text-xs text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 transition-colors"
-            >
-              <ChevronDown size={13} /> Load later weeks
-            </button>
           </div>
 
-          {/* Mobile: continuously scrolling agenda, grouped by week. */}
+          {/* Mobile: swipeable week strip + tap-a-day detail. */}
           <div className="md:hidden space-y-4">
-            <button
-              onClick={() => setWeeksBefore((n) => n + 8)}
-              className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-800 py-2 text-xs text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 transition-colors"
-            >
-              <ChevronUp size={13} /> Load earlier weeks
-            </button>
-            {weekStarts.map((ws, i) => {
-              const days = Array.from({ length: 7 }, (_, k) => addDays(ws, k));
-              const divider = monthDividerLabel(i);
-              return (
-                <div key={ws} className="space-y-2">
-                  {divider && (
-                    <p className="pt-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                      {divider}
-                    </p>
+            <div className="grid grid-cols-7 gap-1">
+              {weekDays.map((date) => {
+                const isToday = date === today;
+                const isSelected = date === selectedDate;
+                const dayTypes = Array.from(
+                  new Set(dayWorkouts(date).map((w) => w.activityType ?? "other")),
+                ).slice(0, 3);
+                const hasRace = races.some((r) => r.date === date);
+                return (
+                  <button
+                    key={date}
+                    onClick={() => setSelectedDate(date)}
+                    className={cn(
+                      "flex flex-col items-center gap-1 rounded-lg border py-1.5 transition-colors",
+                      isSelected
+                        ? "border-accent-500 bg-accent-500/10"
+                        : "border-transparent hover:bg-neutral-800",
+                    )}
+                  >
+                    <span className="text-[10px] font-medium text-neutral-500">
+                      {WEEKDAYS[weekDays.indexOf(date)]}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-sm tabular-nums",
+                        isToday ? "font-bold text-accent-400" : "text-neutral-200",
+                      )}
+                    >
+                      {Number(date.slice(8, 10))}
+                    </span>
+                    <span className="flex h-1.5 items-center gap-0.5">
+                      {hasRace && <span className="h-1.5 w-1.5 rounded-full bg-red-400" />}
+                      {dayTypes.map((t) => (
+                        <span
+                          key={t}
+                          className={cn("h-1.5 w-1.5 rounded-full", sportStyle(t).dot)}
+                        />
+                      ))}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected day detail */}
+            <div className="space-y-3 border-t border-neutral-800 pt-3">
+              <div className="flex items-center justify-between">
+                <p
+                  className={cn(
+                    "text-sm font-medium",
+                    selectedDate === today ? "text-accent-400" : "text-neutral-200",
                   )}
-                  <p className="text-[11px] font-medium text-neutral-500">{weekRangeLabel(ws)}</p>
-                  <div className="space-y-1.5">{days.map((d) => renderMobileDay(d))}</div>
+                >
+                  {dayLabel(selectedDate)}
+                  {selectedDate === today && " · Today"}
+                </p>
+                <div className="flex items-center gap-3">
+                  {clipboard && (
+                    <button
+                      onClick={() => pasteWorkout(selectedDate)}
+                      className="flex items-center gap-1 text-xs text-accent-400 hover:text-accent-300 transition-colors"
+                    >
+                      <Copy size={12} /> Paste
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setNoteForm({ id: null, date: selectedDate, title: "", body: "" })}
+                    className="flex items-center gap-1 text-xs text-neutral-500 hover:text-accent-400 transition-colors"
+                  >
+                    <StickyNote size={12} /> Note
+                  </button>
+                  <button
+                    onClick={() => openCreate(selectedDate)}
+                    className="flex items-center gap-1 text-xs text-neutral-500 hover:text-accent-400 transition-colors"
+                  >
+                    <Plus size={12} /> Workout
+                  </button>
                 </div>
-              );
-            })}
-            <button
-              onClick={() => setWeeksAfter((n) => n + 8)}
-              className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-800 py-2 text-xs text-neutral-500 hover:border-neutral-600 hover:text-neutral-300 transition-colors"
-            >
-              <ChevronDown size={13} /> Load later weeks
-            </button>
+              </div>
+
+              <div className="space-y-2">
+                {dayRaceChips(selectedDate)}
+                {dayNoteChips(selectedDate)}
+                {dayWorkouts(selectedDate).map((w) => (
+                  <WorkoutChip key={w.id} w={w} />
+                ))}
+                {dayWorkouts(selectedDate).length === 0 &&
+                  notes.filter((n) => n.date === selectedDate).length === 0 &&
+                  races.filter((r) => r.date === selectedDate).length === 0 && (
+                    <p className="text-xs text-neutral-600 px-1">Nothing planned</p>
+                  )}
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -1567,7 +1499,7 @@ export default function PlanPage() {
             </div>
             <button
               type="button"
-              onClick={() => setRaceForm({ id: null, date: today, name: "" })}
+              onClick={() => setRaceForm({ id: null, date: selectedDate, name: "" })}
               className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-700 py-2 text-sm font-medium text-neutral-300 hover:border-accent-500/60 hover:text-accent-400 transition-colors"
             >
               <Plus size={14} /> Add race
